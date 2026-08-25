@@ -1,9 +1,9 @@
 /**
  * DeskSonar Authentic Spatial Radar Canvas Renderer
- * Renders:
- * 1. Physical 120-Degree Dual-Mic Azimuth Sector Scope ([-60 deg, +60 deg] vs Range)
- * 2. 2D Range-Doppler Matrix (RDM) Intensity Heatmap
- * 3. 1D Range Profile with REAL Dynamic CA-CFAR Threshold Curve from DSP
+ * Next-Gen High-DPI Visualizer:
+ * 1. 120-Degree Dual-Mic Azimuth Horizon Sector Scope ([-60 deg, +60 deg] vs Range)
+ * 2. 2D Range-Doppler Matrix (RDM) Intensity Heatmap with Neon Turbo Colormap
+ * 3. 1D Range Profile with Dynamic CA-CFAR Threshold Curve & Area Fill
  */
 
 class RadarCanvasRenderer {
@@ -27,66 +27,61 @@ class RadarCanvasRenderer {
       let r = 0, g = 0, b = 0;
       if (norm < 0.25) {
         b = Math.floor(norm * 4 * 255);
+        g = Math.floor(norm * 2 * 100);
       } else if (norm < 0.5) {
         const t = (norm - 0.25) * 4;
-        g = Math.floor(t * 240);
+        g = Math.floor(100 + t * 140);
         b = 255;
       } else if (norm < 0.75) {
         const t = (norm - 0.5) * 4;
         r = Math.floor(t * 255);
-        g = 255;
+        g = 240;
         b = Math.floor((1 - t) * 255);
       } else {
         const t = (norm - 0.75) * 4;
         r = 255;
-        g = Math.floor((1 - t) * 255);
-        b = Math.floor(t * 180);
+        g = Math.floor((1 - t) * 240);
+        b = Math.floor(t * 85);
       }
       ramp.push(`rgb(${r}, ${g}, ${b})`);
     }
     return ramp;
   }
 
-  /**
-   * Renders Authentic 120-Degree Dual-Mic Azimuth Horizon Sector Scope
-   * Azimuth: [-60 deg (Left), 0 deg (Center), +60 deg (Right)]
-   * Range: 0 to 1.2 meters
-   */
   renderSectorRadar(targets, currentAzimuthDeg = 0.0, maxRangeM = 1.2) {
     const ctx = this.polarCtx;
     const w = this.polarCanvas.width;
     const h = this.polarCanvas.height;
 
-    // Origin at bottom-center of canvas
     const ox = w / 2;
     const oy = h - 25;
     const maxRadius = Math.min(w * 0.48, h - 50);
 
-    // Fade clear for phosphor persistence
-    ctx.fillStyle = 'rgba(4, 8, 14, 0.35)';
+    // Fade clear for glowing persistence
+    ctx.fillStyle = 'rgba(2, 6, 17, 0.35)';
     ctx.fillRect(0, 0, w, h);
 
-    // 120-Degree Sector Outline (-60 deg to +60 deg relative to vertical UP)
-    // In Canvas coords (0 is right, -PI/2 is UP):
-    // Left edge: -PI/2 - PI/3 = -5PI/6 (-150 deg)
-    // Right edge: -PI/2 + PI/3 = -PI/6 (-30 deg)
-    const startAngle = -Math.PI / 2 - Math.PI / 3;
-    const endAngle = -Math.PI / 2 + Math.PI / 3;
+    const startAngle = -Math.PI / 2 - Math.PI / 3; // -150 deg
+    const endAngle = -Math.PI / 2 + Math.PI / 3;   // -30 deg
 
-    // Background Sector Fill
+    // Background Sector Fill with subtle radial gradient
+    const grad = ctx.createRadialGradient(ox, oy, 10, ox, oy, maxRadius);
+    grad.addColorStop(0, 'rgba(0, 240, 255, 0.06)');
+    grad.addColorStop(1, 'rgba(2, 6, 17, 0.0)');
     ctx.beginPath();
     ctx.moveTo(ox, oy);
     ctx.arc(ox, oy, maxRadius, startAngle, endAngle);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(0, 240, 255, 0.03)';
+    ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
     // Concentric Range Arcs (20cm, 40cm, 60cm, 80cm, 100cm, 120cm)
     const rangeSteps = [0.2, 0.4, 0.6, 0.8, 1.0, 1.2];
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.16)';
     ctx.lineWidth = 1;
 
     rangeSteps.forEach(r => {
@@ -96,16 +91,16 @@ class RadarCanvasRenderer {
       ctx.stroke();
 
       // Range tag
-      ctx.fillStyle = 'rgba(0, 240, 255, 0.5)';
-      ctx.font = '9px JetBrains Mono';
+      ctx.fillStyle = r === 0.2 ? '#00ff88' : 'rgba(0, 240, 255, 0.6)';
+      ctx.font = '600 9px "JetBrains Mono"';
       const labelX = ox + radius * Math.cos(-Math.PI / 2);
       const labelY = oy + radius * Math.sin(-Math.PI / 2);
       ctx.fillText(`${(r * 100).toFixed(0)}cm`, labelX + 4, labelY + 12);
     });
 
-    // Radial Azimuth Grid Lines (-60, -30, 0, +30, +60 deg)
+    // Radial Azimuth Grid Lines (-60, -45, -30, -15, 0, 15, 30, 45, 60 deg)
     const azGrid = [-60, -45, -30, -15, 0, 15, 30, 45, 60];
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.1)';
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
 
     azGrid.forEach(deg => {
       const rad = -Math.PI / 2 + (deg * Math.PI / 180);
@@ -118,8 +113,8 @@ class RadarCanvasRenderer {
       ctx.stroke();
 
       // Degree label at border
-      ctx.fillStyle = deg === 0 ? '#00ff88' : 'rgba(0, 240, 255, 0.6)';
-      ctx.font = '10px JetBrains Mono';
+      ctx.fillStyle = deg === 0 ? '#00ff88' : 'rgba(0, 240, 255, 0.7)';
+      ctx.font = '600 10px "Space Grotesk"';
       const tx = ox + (maxRadius + 14) * Math.cos(rad) - 10;
       const ty = oy + (maxRadius + 14) * Math.sin(rad) + 4;
       ctx.fillText(`${deg > 0 ? '+' : ''}${deg}°`, tx, ty);
@@ -131,9 +126,9 @@ class RadarCanvasRenderer {
     const curY = oy + maxRadius * Math.sin(curRad);
 
     ctx.save();
-    ctx.strokeStyle = 'rgba(0, 255, 136, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 10;
+    ctx.strokeStyle = 'rgba(0, 255, 136, 0.7)';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 14;
     ctx.shadowColor = '#00ff88';
     ctx.beginPath();
     ctx.moveTo(ox, oy);
@@ -153,7 +148,7 @@ class RadarCanvasRenderer {
 
         // Blip Glow
         ctx.save();
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 18;
         ctx.shadowColor = t.is_approaching ? '#00ff88' : '#00f0ff';
         ctx.fillStyle = t.is_approaching ? '#00ff88' : '#00f0ff';
 
@@ -163,8 +158,8 @@ class RadarCanvasRenderer {
         ctx.restore();
 
         // Target Tag
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px JetBrains Mono';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 10px "JetBrains Mono"';
         const tag = `T${t.track_id || 1}: ${(t.range_m * 100).toFixed(0)}cm | ${t.azimuth_deg}°`;
         ctx.fillText(tag, bx + 10, by - 6);
       });
@@ -201,58 +196,54 @@ class RadarCanvasRenderer {
       }
     }
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, h / 2);
-    ctx.lineTo(w, h / 2);
-    ctx.stroke();
+    // Grid overlays & labels
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(0, 0, w, h);
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.font = '10px JetBrains Mono';
-    ctx.fillText('Doppler Zero (Stationary)', 10, h / 2 - 4);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.font = '600 8px "JetBrains Mono"';
+    ctx.fillText('2D RANGE-DOPPLER HEATMAP', 8, 14);
   }
 
-  /**
-   * Renders Real Range Profile AND Real Dynamic CA-CFAR Threshold Curve from Backend DSP
-   */
-  renderRangeProfile(rangeData, cfarThresholdData, rangeAxis) {
-    if (!rangeData || rangeData.length === 0) return;
+  renderRangeProfile(rangeProfile, cfarCurve, rangeAxis) {
+    if (!rangeProfile || rangeProfile.length === 0) return;
     const ctx = this.rangeCtx;
     const w = this.rangeCanvas.width;
     const h = this.rangeCanvas.height;
 
-    ctx.fillStyle = '#04080e';
+    ctx.fillStyle = '#020611';
     ctx.fillRect(0, 0, w, h);
 
     // Grid lines
-    ctx.strokeStyle = 'rgba(0, 240, 255, 0.1)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
     ctx.lineWidth = 1;
-    for (let y = 30; y < h; y += 40) {
+    for (let y = 30; y < h; y += 35) {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(w, y);
       ctx.stroke();
     }
 
-    const n = rangeData.length;
-    const minDb = -80;
-    const maxDb = 10;
-    const dbSpan = maxDb - minDb;
+    const n = rangeProfile.length;
+    const stepX = w / Math.max(1, n - 1);
 
-    // 1. Draw Real Dynamic CFAR Threshold Curve
-    if (cfarThresholdData && cfarThresholdData.length === n) {
+    let maxVal = 10;
+    for (let i = 0; i < n; i++) {
+      if (rangeProfile[i] > maxVal) maxVal = rangeProfile[i];
+      if (cfarCurve && cfarCurve[i] > maxVal) maxVal = cfarCurve[i];
+    }
+    maxVal *= 1.15;
+
+    // 1. Render CA-CFAR Dynamic Threshold Curve
+    if (cfarCurve && cfarCurve.length === n) {
+      ctx.strokeStyle = '#ff0055';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 4]);
       ctx.beginPath();
-      ctx.strokeStyle = '#ffd000';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
-
       for (let i = 0; i < n; i++) {
-        const x = (i / (n - 1)) * w;
-        const db = cfarThresholdData[i];
-        const normY = Math.max(0, Math.min(1, (db - minDb) / dbSpan));
-        const y = h - (normY * h);
-
+        const x = i * stepX;
+        const y = h - (cfarCurve[i] / maxVal) * (h - 20) - 10;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -260,33 +251,41 @@ class RadarCanvasRenderer {
       ctx.setLineDash([]);
     }
 
-    // 2. Draw Real Measured Range Echo Profile
+    // 2. Render Range Profile Energy with Cyan Gradient Area Fill
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(0, 240, 255, 0.45)');
+    grad.addColorStop(1, 'rgba(0, 240, 255, 0.02)');
+
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = '#00f0ff';
-
+    ctx.moveTo(0, h);
     for (let i = 0; i < n; i++) {
-      const x = (i / (n - 1)) * w;
-      const db = rangeData[i];
-      const normY = Math.max(0, Math.min(1, (db - minDb) / dbSpan));
-      const y = h - (normY * h);
+      const x = i * stepX;
+      const y = h - (rangeProfile[i] / maxVal) * (h - 20) - 10;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
 
+    // Top border of range profile
+    ctx.strokeStyle = '#00f0ff';
+    ctx.lineWidth = 2.0;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00f0ff';
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = i * stepX;
+      const y = h - (rangeProfile[i] / maxVal) * (h - 20) - 10;
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Axis Labels
-    ctx.fillStyle = 'rgba(0, 240, 255, 0.6)';
-    ctx.font = '10px JetBrains Mono';
-    ctx.fillText('4 cm', 6, h - 6);
-    ctx.fillText('60 cm', w / 2 - 15, h - 6);
-    ctx.fillText('120 cm', w - 50, h - 6);
-
-    ctx.fillStyle = '#ffd000';
-    ctx.fillText('-- CFAR THRESHOLD', w - 130, 16);
+    // Label
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.font = '600 8px "JetBrains Mono"';
+    ctx.fillText('1D RANGE PROFILE vs CFAR', 8, 14);
   }
 }

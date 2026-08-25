@@ -1,11 +1,11 @@
 /**
  * DeskSonar 3D Spatial Holographic Radar Engine (Three.js)
- * Visualizes:
- * - 3D Translucent 20cm Origin Spherical Geofence
+ * Next-Gen Spatial Computing Visualizer:
+ * - 3D Translucent 20cm Origin Spherical Geofence with dynamic breathing aura
  * - 3D Real-Time Hand Bounding Box Dimensions (L x W x H in cm)
- * - 3D Laptop with dynamic physical screen tilt angle
- * - 3D Physical Desk Surface with tap shockwave ripples
- * - 3D Real-Time Hand/Finger Tracking Avatar (X, Y, Z)
+ * - 3D Cyberpunk Laptop with dynamic screen tilt & keyboard backlighting
+ * - 3D Reflective Desk Surface with physical tap shockwave ripples
+ * - 3D Real-Time Hand/Finger Tracking Avatar with Particle Trail
  */
 
 class Radar3DEngine {
@@ -29,8 +29,9 @@ class Radar3DEngine {
     this.handAvatar = null;
     this.handBBoxMesh = null;
     this.geofenceSphere = null;
+    this.geofenceAura = null;
     this.handTrail = [];
-    this.maxTrailPoints = 30;
+    this.maxTrailPoints = 40;
     this.trailLine = null;
     this.ultrasoundCone = null;
     this.ripples = [];
@@ -53,19 +54,20 @@ class Radar3DEngine {
 
     // 1. Scene setup
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x04080e);
-    this.scene.fog = new THREE.FogExp2(0x04080e, 0.6);
+    this.scene.background = new THREE.Color(0x020611);
+    this.scene.fog = new THREE.FogExp2(0x020611, 0.5);
 
     // 2. Camera setup
     this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.01, 20);
-    this.camera.position.set(0, 0.40, 0.55);
+    this.camera.position.set(0, 0.38, 0.52);
     this.camera.lookAt(0, 0.10, 0.15);
 
     // 3. Renderer setup
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
     this.renderer.setSize(this.width, this.height);
-    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.container.innerHTML = '';
     this.container.appendChild(this.renderer.domElement);
 
@@ -79,17 +81,21 @@ class Radar3DEngine {
       this.controls.maxDistance = 1.8;
     }
 
-    // 5. Lighting
-    const ambientLight = new THREE.AmbientLight(0x00f0ff, 0.4);
+    // 5. Cinematic Lighting
+    const ambientLight = new THREE.AmbientLight(0x00f0ff, 0.5);
     this.scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(0.5, 1.0, 0.5);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(0.6, 1.2, 0.6);
     this.scene.add(dirLight);
 
-    const glowLight = new THREE.PointLight(0x00f0ff, 1.5, 1.2);
-    glowLight.position.set(0, 0.2, 0);
-    this.scene.add(glowLight);
+    const cyanPointLight = new THREE.PointLight(0x00f0ff, 2.0, 1.5);
+    cyanPointLight.position.set(0, 0.25, 0.05);
+    this.scene.add(cyanPointLight);
+
+    const greenRimLight = new THREE.PointLight(0x00ff88, 1.8, 1.2);
+    greenRimLight.position.set(-0.3, 0.2, 0.25);
+    this.scene.add(greenRimLight);
 
     // 6. Build 3D World Elements
     this._buildDeskSurface();
@@ -108,17 +114,17 @@ class Radar3DEngine {
   }
 
   _buildGrid() {
-    const gridHelper = new THREE.GridHelper(1.6, 32, 0x00f0ff, 0x0a2233);
+    const gridHelper = new THREE.GridHelper(1.8, 36, 0x00f0ff, 0x07273e);
     gridHelper.position.y = -0.001;
     this.scene.add(gridHelper);
   }
 
   _buildDeskSurface() {
-    const deskGeo = new THREE.BoxGeometry(1.6, 0.02, 1.0);
+    const deskGeo = new THREE.BoxGeometry(1.8, 0.02, 1.2);
     const deskMat = new THREE.MeshStandardMaterial({
-      color: 0x08121f,
-      roughness: 0.4,
-      metalness: 0.8
+      color: 0x050c18,
+      roughness: 0.2,
+      metalness: 0.85
     });
     this.deskMesh = new THREE.Mesh(deskGeo, deskMat);
     this.deskMesh.position.set(0, -0.01, 0.35);
@@ -126,17 +132,28 @@ class Radar3DEngine {
   }
 
   _buildGeofenceSphere() {
-    // 20cm radius spherical geofence from microphone origin (0, 0.20, 0)
-    const sphereGeo = new THREE.SphereGeometry(0.20, 24, 24);
+    // 20cm radius spherical geofence from microphone origin (0, 0.15, 0.10)
+    const sphereGeo = new THREE.SphereGeometry(0.20, 32, 32);
     const sphereMat = new THREE.MeshBasicMaterial({
       color: 0x00ff88,
       wireframe: true,
       transparent: true,
-      opacity: 0.20
+      opacity: 0.25
     });
     this.geofenceSphere = new THREE.Mesh(sphereGeo, sphereMat);
     this.geofenceSphere.position.set(0, 0.15, 0.10);
     this.scene.add(this.geofenceSphere);
+
+    // Subtle inner translucent glow
+    const auraGeo = new THREE.SphereGeometry(0.196, 24, 24);
+    const auraMat = new THREE.MeshBasicMaterial({
+      color: 0x00ff88,
+      transparent: true,
+      opacity: 0.04,
+      side: THREE.BackSide
+    });
+    this.geofenceAura = new THREE.Mesh(auraGeo, auraMat);
+    this.geofenceSphere.add(this.geofenceAura);
   }
 
   _buildLaptopModel() {
@@ -144,19 +161,19 @@ class Radar3DEngine {
 
     // Base (Keyboard deck)
     const baseGeo = new THREE.BoxGeometry(0.32, 0.012, 0.22);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x111923, metalness: 0.9, roughness: 0.2 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x0b1320, metalness: 0.9, roughness: 0.25 });
     const base = new THREE.Mesh(baseGeo, baseMat);
     this.laptopGroup.add(base);
 
-    // Glowing Keyboard
+    // Glowing Cyan Keyboard
     const kbGeo = new THREE.PlaneGeometry(0.26, 0.11);
-    const kbMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.4 });
+    const kbMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.5 });
     const kb = new THREE.Mesh(kbGeo, kbMat);
     kb.rotation.x = -Math.PI / 2;
     kb.position.set(0, 0.007, -0.02);
     this.laptopGroup.add(kb);
 
-    // Stereo Speaker Emitters
+    // Stereo Speaker Emitters with Green Glow
     const spkGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.005, 16);
     const spkMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
 
@@ -171,20 +188,31 @@ class Radar3DEngine {
     // Screen
     this.laptopScreenGroup = new THREE.Group();
     const screenGeo = new THREE.BoxGeometry(0.32, 0.22, 0.008);
-    const screenMat = new THREE.MeshStandardMaterial({ color: 0x080f18, metalness: 0.8 });
+    const screenMat = new THREE.MeshStandardMaterial({ color: 0x080f18, metalness: 0.85, roughness: 0.2 });
     const screenBack = new THREE.Mesh(screenGeo, screenMat);
     screenBack.position.set(0, 0.11, 0);
     this.laptopScreenGroup.add(screenBack);
 
     // Glowing Display Panel
     const dispGeo = new THREE.PlaneGeometry(0.30, 0.19);
-    const dispMat = new THREE.MeshBasicMaterial({ color: 0x041525 });
+    const dispMat = new THREE.MeshBasicMaterial({ color: 0x021020 });
     const disp = new THREE.Mesh(dispGeo, dispMat);
     disp.position.set(0, 0.11, 0.005);
     this.laptopScreenGroup.add(disp);
 
+    // Dual MEMS Bezel Microphones (Intel SST)
+    const micGeo = new THREE.SphereGeometry(0.004, 8, 8);
+    const micMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const micL = new THREE.Mesh(micGeo, micMat);
+    micL.position.set(-0.04, 0.21, 0.006);
+    this.laptopScreenGroup.add(micL);
+
+    const micR = new THREE.Mesh(micGeo, micMat);
+    micR.position.set(0.04, 0.21, 0.006);
+    this.laptopScreenGroup.add(micR);
+
     this.laptopScreenGroup.position.set(0, 0.006, -0.11);
-    this.laptopScreenGroup.rotation.x = 0.26;
+    this.laptopScreenGroup.rotation.x = 0.26; // Default tilt (~105 deg)
     this.laptopGroup.add(this.laptopScreenGroup);
 
     this.laptopGroup.position.set(0, 0.006, 0);
@@ -198,63 +226,59 @@ class Radar3DEngine {
     const coreGeo = new THREE.SphereGeometry(0.022, 24, 24);
     const coreMat = new THREE.MeshBasicMaterial({
       color: 0x00ff88,
-      transparent: true,
-      opacity: 0.85
+      wireframe: true
     });
-    this.coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    handGroup.add(this.coreMesh);
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    handGroup.add(core);
 
-    // Outer Holographic Aura
-    const auraGeo = new THREE.SphereGeometry(0.035, 16, 16);
-    const auraMat = new THREE.MeshBasicMaterial({
+    // Inner Glowing Core
+    const innerGeo = new THREE.SphereGeometry(0.014, 16, 16);
+    const innerMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
-      wireframe: true,
       transparent: true,
-      opacity: 0.4
+      opacity: 0.8
     });
-    this.auraMesh = new THREE.Mesh(auraGeo, auraMat);
-    handGroup.add(this.auraMesh);
+    const inner = new THREE.Mesh(innerGeo, innerMat);
+    handGroup.add(inner);
 
-    // 5 Finger Nodes
-    this.fingerNodes = [];
-    for (let i = 0; i < 5; i++) {
-      const fGeo = new THREE.SphereGeometry(0.005, 12, 12);
-      const fMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
-      const fMesh = new THREE.Mesh(fGeo, fMat);
-      const angle = (i - 2) * 0.35;
-      fMesh.position.set(Math.sin(angle) * 0.03, 0.005, Math.cos(angle) * 0.03 + 0.012);
-      handGroup.add(fMesh);
-      this.fingerNodes.push(fMesh);
-    }
+    // Concentric Holographic Ring
+    const ringGeo = new THREE.RingGeometry(0.035, 0.042, 32);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.6
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    handGroup.add(ring);
+    this.handRing = ring;
 
+    handGroup.position.set(0, 0.12, 0.15);
     this.handAvatar = handGroup;
-    this.handAvatar.position.set(0, 0.12, 0.15);
     this.scene.add(this.handAvatar);
 
-    // 3D Motion Trail
-    const maxPoints = this.maxTrailPoints;
-    const positions = new Float32Array(maxPoints * 3);
+    // Trajectory Trail
     const trailGeo = new THREE.BufferGeometry();
+    const positions = new Float32Array(this.maxTrailPoints * 3);
     trailGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
     const trailMat = new THREE.LineBasicMaterial({
       color: 0x00ff88,
       transparent: true,
-      opacity: 0.6,
-      linewidth: 2
+      opacity: 0.5
     });
     this.trailLine = new THREE.Line(trailGeo, trailMat);
     this.scene.add(this.trailLine);
   }
 
   _buildHandBoundingBox() {
-    // 3D Wireframe Box showing live L x W x H
+    // Dynamic Hand 3D Bounding Box (Length x Width x Height)
     const boxGeo = new THREE.BoxGeometry(0.08, 0.04, 0.08);
     const boxMat = new THREE.MeshBasicMaterial({
-      color: 0x00ff88,
+      color: 0x00f0ff,
       wireframe: true,
       transparent: true,
-      opacity: 0.75
+      opacity: 0.4
     });
     this.handBBoxMesh = new THREE.Mesh(boxGeo, boxMat);
     this.handBBoxMesh.position.set(0, 0.12, 0.15);
@@ -262,160 +286,72 @@ class Radar3DEngine {
   }
 
   _buildUltrasoundBeam() {
-    const coneGeo = new THREE.ConeGeometry(0.35, 0.40, 24, 1, true);
+    const coneGeo = new THREE.ConeGeometry(0.18, 0.35, 24, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({
       color: 0x00f0ff,
       wireframe: true,
       transparent: true,
-      opacity: 0.10,
+      opacity: 0.08,
       side: THREE.DoubleSide
     });
     this.ultrasoundCone = new THREE.Mesh(coneGeo, coneMat);
-    this.ultrasoundCone.position.set(0, 0.02, 0.20);
-    this.ultrasoundCone.rotation.x = Math.PI / 2;
+    this.ultrasoundCone.rotation.x = -Math.PI / 2 + 0.25;
+    this.ultrasoundCone.position.set(0, 0.10, 0.18);
     this.scene.add(this.ultrasoundCone);
   }
 
-  triggerDeskTapRipple(x = 0, z = 0.15) {
-    const rippleGeo = new THREE.RingGeometry(0.01, 0.02, 32);
+  triggerDeskTapShockwave(x = 0, z = 0.25) {
+    const rippleGeo = new THREE.RingGeometry(0.01, 0.03, 32);
     const rippleMat = new THREE.MeshBasicMaterial({
       color: 0xff0055,
+      side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.9,
-      side: THREE.DoubleSide
+      opacity: 0.9
     });
     const ripple = new THREE.Mesh(rippleGeo, rippleMat);
     ripple.rotation.x = -Math.PI / 2;
-    ripple.position.set(x, 0.002, z);
+    ripple.position.set(x, 0.005, z);
     this.scene.add(ripple);
-    this.ripples.push({ mesh: ripple, radius: 0.02, opacity: 0.9 });
+    this.ripples.push({ mesh: ripple, scale: 1.0, opacity: 0.9 });
   }
 
-  updateAcousticTargets(spatial3d, targets, isLiving, isTap, geometry, bbox) {
-    if (geometry && this.laptopScreenGroup) {
-      const tiltRad = (geometry.screen_tilt_deg - 90.0) * (Math.PI / 180.0);
-      this.laptopScreenGroup.rotation.x = tiltRad;
+  updateAcousticTargets(spatial3D, targets, isLivingHuman = true, isTap = false, geometry = null, bbox = null) {
+    if (spatial3D) {
+      this.targetHandPos.x = THREE.MathUtils.clamp(spatial3D.x, -0.25, 0.25);
+      this.targetHandPos.y = THREE.MathUtils.clamp(spatial3D.y, 0.02, 0.35);
+      this.targetHandPos.z = THREE.MathUtils.clamp(spatial3D.z, 0.04, 0.40);
     }
 
     if (bbox) {
+      this.currentBBoxSize.l = (bbox.length_cm || 10.0) * 0.01;
+      this.currentBBoxSize.w = (bbox.width_cm || 8.0) * 0.01;
+      this.currentBBoxSize.h = (bbox.height_cm || 4.0) * 0.01;
       this.isInGeofence = bbox.is_in_20cm_geofence;
-      this.currentBBoxSize.l = Math.max(0.04, (bbox.length_cm || 8.0) * 0.01);
-      this.currentBBoxSize.w = Math.max(0.04, (bbox.width_cm || 8.0) * 0.01);
-      this.currentBBoxSize.h = Math.max(0.02, (bbox.height_cm || 4.0) * 0.01);
-
-      if (this.geofenceSphere) {
-        this.geofenceSphere.material.color.setHex(this.isInGeofence ? 0x00ff88 : 0x556677);
-      }
-      if (this.handBBoxMesh) {
-        this.handBBoxMesh.scale.set(
-          this.currentBBoxSize.w / 0.08,
-          this.currentBBoxSize.h / 0.04,
-          this.currentBBoxSize.l / 0.08
-        );
-        this.handBBoxMesh.material.color.setHex(this.isInGeofence ? 0x00ff88 : 0x8899aa);
-      }
     }
 
-    if (!spatial3d) return;
-
-    const rawX = spatial3d.x || 0.0;
-    const rawY = Math.max(0.03, Math.min(0.35, spatial3d.y || 0.12));
-    const rawZ = Math.max(0.04, Math.min(0.35, spatial3d.z || 0.15));
-
-    this.targetHandPos.x = rawX;
-    this.targetHandPos.y = rawY;
-    this.targetHandPos.z = rawZ;
+    if (geometry && geometry.screen_tilt_deg && this.laptopScreenGroup) {
+      const tiltRad = (180.0 - geometry.screen_tilt_deg) * (Math.PI / 180.0);
+      this.laptopScreenGroup.rotation.x = THREE.MathUtils.lerp(this.laptopScreenGroup.rotation.x, tiltRad, 0.1);
+    }
 
     if (isTap) {
-      this.triggerDeskTapRipple(rawX, rawZ);
-    }
-  }
-
-  animate() {
-    requestAnimationFrame(() => this.animate());
-
-    if (this.controls) this.controls.update();
-
-    // 1. Lerp Hand Avatar & Bounding Box Position
-    const lerpFactor = 0.25;
-    this.currentHandPos.x += (this.targetHandPos.x - this.currentHandPos.x) * lerpFactor;
-    this.currentHandPos.y += (this.targetHandPos.y - this.currentHandPos.y) * lerpFactor;
-    this.currentHandPos.z += (this.targetHandPos.z - this.currentHandPos.z) * lerpFactor;
-
-    if (this.handAvatar) {
-      this.handAvatar.position.set(
-        this.currentHandPos.x,
-        this.currentHandPos.y,
-        this.currentHandPos.z
-      );
-
-      if (this.auraMesh) {
-        this.auraMesh.rotation.y += 0.02;
-        this.auraMesh.rotation.x += 0.01;
-      }
-    }
-
-    if (this.handBBoxMesh) {
-      this.handBBoxMesh.position.set(
-        this.currentHandPos.x,
-        this.currentHandPos.y,
-        this.currentHandPos.z
-      );
-    }
-
-    // 2. Update Motion Trail
-    if (this.trailLine) {
-      this.handTrail.push({ ...this.currentHandPos });
-      if (this.handTrail.length > this.maxTrailPoints) {
-        this.handTrail.shift();
-      }
-
-      const posAttr = this.trailLine.geometry.attributes.position;
-      for (let i = 0; i < this.maxTrailPoints; i++) {
-        const pt = this.handTrail[i] || this.currentHandPos;
-        posAttr.setXYZ(i, pt.x, pt.y, pt.z);
-      }
-      posAttr.needsUpdate = true;
-    }
-
-    // 3. Pulse Acoustic Waves
-    this.wavePhase += 0.04;
-    if (this.ultrasoundCone) {
-      const scale = 1.0 + 0.04 * Math.sin(this.wavePhase * 4);
-      this.ultrasoundCone.scale.set(scale, 1.0, scale);
-    }
-
-    // 4. Animate Desk Tap Ripples
-    for (let i = this.ripples.length - 1; i >= 0; i--) {
-      const rip = this.ripples[i];
-      rip.radius += 0.008;
-      rip.opacity -= 0.025;
-      rip.mesh.scale.set(rip.radius * 30, rip.radius * 30, 1);
-      rip.mesh.material.opacity = Math.max(0, rip.opacity);
-
-      if (rip.opacity <= 0) {
-        this.scene.remove(rip.mesh);
-        this.ripples.splice(i, 1);
-      }
-    }
-
-    if (this.renderer && this.scene && this.camera) {
-      this.renderer.render(this.scene, this.camera);
+      this.triggerDeskTapShockwave(this.currentHandPos.x, this.currentHandPos.z);
     }
   }
 
   setCameraView(viewMode) {
-    if (!this.camera) return;
-    if (viewMode === 'top') {
-      this.camera.position.set(0, 0.75, 0.20);
-      this.camera.lookAt(0, 0, 0.20);
+    if (!this.controls) return;
+    if (viewMode === 'perspective') {
+      this.camera.position.set(0, 0.38, 0.52);
+      this.controls.target.set(0, 0.10, 0.15);
+    } else if (viewMode === 'top') {
+      this.camera.position.set(0, 0.65, 0.18);
+      this.controls.target.set(0, 0.05, 0.18);
     } else if (viewMode === 'side') {
-      this.camera.position.set(0.60, 0.20, 0.20);
-      this.camera.lookAt(0, 0.1, 0.20);
-    } else {
-      this.camera.position.set(0, 0.40, 0.55);
-      this.camera.lookAt(0, 0.10, 0.15);
+      this.camera.position.set(0.55, 0.15, 0.18);
+      this.controls.target.set(0, 0.10, 0.18);
     }
+    this.controls.update();
   }
 
   onWindowResize() {
@@ -425,5 +361,90 @@ class Radar3DEngine {
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(this.width, this.height);
+  }
+
+  animate() {
+    requestAnimationFrame(() => this.animate());
+
+    this.wavePhase += 0.04;
+
+    // Smooth Hand Position Lerp
+    this.currentHandPos.x = THREE.MathUtils.lerp(this.currentHandPos.x, this.targetHandPos.x, 0.25);
+    this.currentHandPos.y = THREE.MathUtils.lerp(this.currentHandPos.y, this.targetHandPos.y, 0.25);
+    this.currentHandPos.z = THREE.MathUtils.lerp(this.currentHandPos.z, this.targetHandPos.z, 0.25);
+
+    if (this.handAvatar) {
+      this.handAvatar.position.set(this.currentHandPos.x, this.currentHandPos.y, this.currentHandPos.z);
+      if (this.handRing) {
+        this.handRing.rotation.z += 0.02;
+        const scale = 1.0 + Math.sin(this.wavePhase * 2) * 0.08;
+        this.handRing.scale.set(scale, scale, scale);
+      }
+    }
+
+    // Dynamic Bounding Box Update
+    if (this.handBBoxMesh) {
+      this.handBBoxMesh.position.set(this.currentHandPos.x, this.currentHandPos.y, this.currentHandPos.z);
+      this.handBBoxMesh.scale.set(
+        Math.max(0.04, this.currentBBoxSize.w),
+        Math.max(0.02, this.currentBBoxSize.h),
+        Math.max(0.04, this.currentBBoxSize.l)
+      );
+
+      // Color change on geofence lock
+      if (this.isInGeofence) {
+        this.handBBoxMesh.material.color.setHex(0x00ff88);
+      } else {
+        this.handBBoxMesh.material.color.setHex(0xffb703);
+      }
+    }
+
+    // Geofence Sphere Pulsing Aura
+    if (this.geofenceSphere) {
+      const pulse = 1.0 + Math.sin(this.wavePhase) * 0.015;
+      this.geofenceSphere.scale.set(pulse, pulse, pulse);
+      if (this.isInGeofence) {
+        this.geofenceSphere.material.color.setHex(0x00ff88);
+        this.geofenceSphere.material.opacity = 0.22 + Math.sin(this.wavePhase * 1.5) * 0.05;
+      } else {
+        this.geofenceSphere.material.color.setHex(0xff0055);
+        this.geofenceSphere.material.opacity = 0.35;
+      }
+    }
+
+    // Update Particle Trail
+    this.handTrail.push(new THREE.Vector3(this.currentHandPos.x, this.currentHandPos.y, this.currentHandPos.z));
+    if (this.handTrail.length > this.maxTrailPoints) {
+      this.handTrail.shift();
+    }
+    if (this.trailLine) {
+      const posAttr = this.trailLine.geometry.attributes.position;
+      for (let i = 0; i < this.handTrail.length; i++) {
+        posAttr.setXYZ(i, this.handTrail[i].x, this.handTrail[i].y, this.handTrail[i].z);
+      }
+      this.trailLine.geometry.setDrawRange(0, this.handTrail.length);
+      posAttr.needsUpdate = true;
+    }
+
+    // Animate Tap Shockwave Ripples
+    for (let i = this.ripples.length - 1; i >= 0; i--) {
+      const r = this.ripples[i];
+      r.scale += 0.08;
+      r.opacity -= 0.025;
+      r.mesh.scale.set(r.scale, r.scale, 1);
+      r.mesh.material.opacity = Math.max(0, r.opacity);
+      if (r.opacity <= 0) {
+        this.scene.remove(r.mesh);
+        this.ripples.splice(i, 1);
+      }
+    }
+
+    if (this.controls) {
+      this.controls.update();
+    }
+
+    if (this.renderer && this.scene && this.camera) {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 }
