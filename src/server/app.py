@@ -94,9 +94,9 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
     spatial_cursor = SpatialCursorController(
         enabled=True,
         click_cooldown_s=0.20,
-        gain_x=25.0,
-        gain_y=20.0,
-        motion_threshold=1.0e-7
+        gain_x=35.0,
+        gain_y=28.0,
+        motion_threshold=2.0e-11
     )
 
     audio_engine = AudioEngine(
@@ -423,6 +423,26 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
         state["cursor_enabled"] = req.enabled
         spatial_cursor.set_enabled(req.enabled)
         return {"cursor_enabled": state["cursor_enabled"]}
+
+    @app.post("/api/cursor/test-move")
+    async def test_cursor_move():
+        """Moves cursor in a circle to verify hardware OS injection live."""
+        import math, ctypes
+        try:
+            u32 = ctypes.windll.user32
+            cx = u32.GetSystemMetrics(0) // 2
+            cy = u32.GetSystemMetrics(1) // 2
+            for deg in range(0, 360, 15):
+                rad = math.radians(deg)
+                x = int(cx + 120 * math.cos(rad))
+                y = int(cy + 120 * math.sin(rad))
+                u32.SetCursorPos(x, y)
+                time.sleep(0.015)
+            u32.SetCursorPos(cx, cy)
+            return {"status": "ok", "message": "Windows hardware cursor moved successfully in a circle!"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
 
     @app.post("/api/calibrate")
     async def trigger_calibration():

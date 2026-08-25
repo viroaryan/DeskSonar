@@ -318,17 +318,30 @@ class Radar3DEngine {
   }
 
   updateAcousticTargets(spatial3D, targets, isLivingHuman = true, isTap = false, geometry = null, bbox = null) {
-    if (spatial3D) {
+    const hasTargets = targets && targets.length > 0;
+    if (this.handAvatar) {
+      this.handAvatar.visible = hasTargets;
+    }
+    if (this.handBBoxMesh) {
+      this.handBBoxMesh.visible = hasTargets;
+    }
+    if (this.trailLine) {
+      this.trailLine.visible = hasTargets;
+    }
+
+    if (spatial3D && hasTargets) {
       this.targetHandPos.x = THREE.MathUtils.clamp(spatial3D.x, -0.25, 0.25);
       this.targetHandPos.y = THREE.MathUtils.clamp(spatial3D.y, 0.02, 0.35);
       this.targetHandPos.z = THREE.MathUtils.clamp(spatial3D.z, 0.04, 0.40);
     }
 
-    if (bbox) {
+    if (bbox && hasTargets) {
       this.currentBBoxSize.l = (bbox.length_cm || 10.0) * 0.01;
       this.currentBBoxSize.w = (bbox.width_cm || 8.0) * 0.01;
       this.currentBBoxSize.h = (bbox.height_cm || 4.0) * 0.01;
       this.isInGeofence = bbox.is_in_20cm_geofence;
+    } else {
+      this.isInGeofence = false;
     }
 
     if (geometry && geometry.screen_tilt_deg && this.laptopScreenGroup) {
@@ -336,10 +349,11 @@ class Radar3DEngine {
       this.laptopScreenGroup.rotation.x = THREE.MathUtils.lerp(this.laptopScreenGroup.rotation.x, tiltRad, 0.1);
     }
 
-    if (isTap) {
+    if (isTap && hasTargets) {
       this.triggerDeskTapShockwave(this.currentHandPos.x, this.currentHandPos.z);
     }
   }
+
 
   setCameraView(viewMode) {
     if (!this.controls) return;

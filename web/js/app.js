@@ -286,20 +286,28 @@ function handleRadarFrame(frame) {
 
   // 3. Real-Time 3D Dimensions (L x W x H) & Geofence
   const bbox = frame.bounding_box;
-  if (bbox) {
+  const hasTargets = frame.targets && frame.targets.length > 0;
+
+  if (hasTargets && bbox) {
     setTextSafely('bbox-dims-val', `L:${bbox.length_cm} × W:${bbox.width_cm} × H:${bbox.height_cm} cm`);
     if (bbox.is_in_20cm_geofence) {
-      setHtmlSafely('geofence-badge', `<span class="dot"></span> 20CM GEOFENCE LOCK (${bbox.origin_distance_cm} cm)`);
+      setHtmlSafely('geofence-badge', `<span class="dot" style="background:#10b981"></span> 20CM GEOFENCE LOCK (${bbox.origin_distance_cm} cm)`);
       setClassSafely('geofence-badge', 'value green');
     } else {
-      setHtmlSafely('geofence-badge', `<span class="dot"></span> OUTSIDE 20CM (${bbox.origin_distance_cm} cm)`);
+      setHtmlSafely('geofence-badge', `<span class="dot" style="background:#f59e0b"></span> OUTSIDE 20CM (${bbox.origin_distance_cm} cm)`);
       setClassSafely('geofence-badge', 'value yellow');
     }
+  } else {
+    setTextSafely('bbox-dims-val', 'NO HAND IN 20CM FIELD');
+    setHtmlSafely('geofence-badge', '<span class="dot" style="background:#94a3b8"></span> NO OBJECT IN FIELD');
+    setClassSafely('geofence-badge', 'value');
   }
 
-  if (frame.spatial_3d) {
+  if (hasTargets && frame.spatial_3d) {
     const s = frame.spatial_3d;
     setTextSafely('coords-3d-val', `X:${(s.x * 100).toFixed(0)} Y:${(s.y * 100).toFixed(0)} Z:${(s.z * 100).toFixed(0)} cm`);
+  } else {
+    setTextSafely('coords-3d-val', '-- cm');
   }
 
   if (frame.cursor_pos) {
@@ -309,6 +317,7 @@ function handleRadarFrame(frame) {
   if (frame.geometry) {
     setTextSafely('laptop-tilt-val', `${frame.geometry.screen_tilt_deg}° TILT | ${frame.geometry.mic_height_cm}cm HEIGHT`);
   }
+
 
   // 4. ML Neural Network Gesture Probabilities
   if (frame.ml) {
@@ -521,3 +530,29 @@ function triggerMLRetrain() {
       }
     });
 }
+
+function testOSCursorMovement() {
+  const btn = document.getElementById('test-cursor-btn');
+  if (btn) {
+    btn.textContent = '🖱️ Moving Windows Cursor...';
+    btn.disabled = true;
+  }
+  fetch('/api/cursor/test-move', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (btn) {
+        btn.textContent = '✅ Verified: OS Cursor Moved!';
+        setTimeout(() => {
+          btn.textContent = '🖱️ Test Windows Cursor Live Move';
+          btn.disabled = false;
+        }, 2000);
+      }
+    })
+    .catch(() => {
+      if (btn) {
+        btn.textContent = '🖱️ Test Windows Cursor Live Move';
+        btn.disabled = false;
+      }
+    });
+}
+
