@@ -1,0 +1,11 @@
+{
+  "name": "desksonar",
+  "version": "4.0.0",
+  "description": "Acoustic Gesture Radar & Deep Neural Network Engine",
+  "scripts": {
+    "build": "echo 'DeskSonar Vercel Build Ready'"
+  },
+  "keywords": ["acoustic-radar", "gesture-recognition", "ultrasound", "neural-network", "fastapi", "threejs"],
+  "author": "Aryan Viro",
+  "license": "MIT"
+}

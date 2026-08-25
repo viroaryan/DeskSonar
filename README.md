@@ -4,7 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg)](https://threejs.org/)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fviroaryan%2FDeskSonar)
 [![Tests: 18 Passed](https://img.shields.io/badge/Tests-18%2F18%20Passing-brightgreen.svg)]()
+
 
 > **Turn any commodity laptop into an active 3D ultrasonic spatial radar and touchless air mouse using ONLY built-in speakers and digital MEMS microphone arrays — zero external cameras or sensors required.**
 
@@ -180,6 +182,32 @@ Open your browser and navigate to:
 👉 **[http://localhost:8765](http://localhost:8765)**
 
 *(Optional: Open `http://<YOUR_IP>:8765/phone` on your smartphone for dual-node transceiver companion).*
+
+---
+
+## ☁️ Deploying to Vercel (1-Click Cloud Hosting)
+
+DeskSonar is pre-configured for **1-Click Serverless Deployment on Vercel**:
+
+### Option A: 1-Click Web Deployment
+Click the button below to fork and deploy directly on your Vercel account:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fviroaryan%2FDeskSonar)
+
+### Option B: Deploy via Vercel CLI
+```bash
+# Install Vercel CLI globally
+npm install -g vercel
+
+# Deploy directly from your local directory
+vercel
+```
+
+The cloud deployment automatically serves:
+* Static 3D WebGL Holographic Studio & Cyberpunk HUD at `https://<your-project>.vercel.app/`
+* Mobile Phone Transceiver Companion at `https://<your-project>.vercel.app/phone`
+* Serverless REST API endpoints at `https://<your-project>.vercel.app/api/status`
+
 
 ---
 
