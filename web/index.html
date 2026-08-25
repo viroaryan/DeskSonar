@@ -7,12 +7,33 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
   <!-- Three.js 3D Engine & OrbitControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body class="dark-theme">
+
+  <!-- Microphone Hardware Permission Modal (Prompt on click) -->
+  <div id="mic-permission-modal" class="permission-modal">
+    <div class="permission-card">
+      <div class="modal-icon">🎙️</div>
+      <h2>ENABLE LAPTOP MICROPHONE ACCESS</h2>
+      <p>DeskSonar uses your laptop's built-in digital MEMS microphone to capture ultrasonic hand echoes (18.5 - 20.5 kHz) for real-time 3D spatial radar and touchless air mouse control.</p>
+      <div class="modal-btn-group">
+        <button id="grant-mic-btn" class="hud-btn primary large-btn" onclick="requestBrowserMicrophonePermission()">
+          🎙️ GRANT MICROPHONE ACCESS NOW
+        </button>
+        <button class="hud-btn" onclick="dismissMicModal()">
+          Skip to Demo Mode
+        </button>
+      </div>
+      <div class="modal-troubleshoot">
+        🔒 <span>If prompted by Chrome/Edge, click <b>"Allow"</b> to activate hardware radar.</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Futuristic HUD Header -->
   <header class="hud-header">
     <div class="logo-area">
@@ -24,6 +45,11 @@
     </div>
 
     <div class="system-status-bar">
+      <!-- Direct Hardware Mic Permission Trigger Badge -->
+      <div class="status-item" id="mic-perm-status-item" onclick="requestBrowserMicrophonePermission()" style="cursor: pointer;">
+        <span class="label">HARDWARE MIC PERMISSION</span>
+        <span class="value yellow" id="mic-perm-badge">⚠️ CLICK TO ALLOW MIC</span>
+      </div>
       <div class="status-item">
         <span class="label">ML NEURAL NET</span>
         <span class="value green" id="ml-pred-badge">✨ IDLE</span>
@@ -37,8 +63,8 @@
         <span class="value green" id="geofence-badge">🟢 20CM GEOFENCE LOCK</span>
       </div>
       <div class="status-item">
-        <span class="label">CONNECTION</span>
-        <span class="value" id="conn-status"><span class="dot blink"></span> CONNECTING</span>
+        <span class="label">RADAR STREAM</span>
+        <span class="value" id="conn-status"><span class="dot blink"></span> CONNECTING...</span>
       </div>
     </div>
   </header>
@@ -80,7 +106,7 @@
       </div>
     </section>
 
-    <!-- CENTER TOP PANEL: 120° Dual-Mic Azimuth Sector Radar (2D Beamformer) -->
+    <!-- CENTER TOP PANEL: 120° Dual-Mic Azimuth Sector Radar -->
     <section class="panel sector-panel">
       <div class="panel-header">
         <span class="header-icon">📡</span>
@@ -97,7 +123,7 @@
       </div>
     </section>
 
-    <!-- CENTER BOTTOM PANEL: 1D Range Profile & Real CFAR Curve + RDM -->
+    <!-- CENTER BOTTOM PANEL: 1D Range Profile & CA-CFAR Curve + RDM -->
     <section class="panel range-profile-panel">
       <div class="panel-header">
         <span class="header-icon">📈</span>
