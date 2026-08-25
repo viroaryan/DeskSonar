@@ -1,20 +1,22 @@
 /**
- * DeskSonar Production Web Dashboard Controller (v4.0 ML Engine)
+ * DeskSonar Apple-Style Minimalist Air Trackpad Controller
  * Features:
- * - Direct In-Browser Microphone Permission & Web Audio Level Analyser
- * - Vector SVG Icon System
- * - Real-time Full-Duplex WebSocket Telemetry Bridge (Zero Synthetic Mocks)
- * - Deep Neural Network Gesture Probability Stream
- * - Cognitive AI Reasoning & Telemetry
- * - 3D Spatial Studio & 20cm Geofence Hand Bounding Box
- * - Win32 Hardware Air Mouse & Click Telemetry
+ * - 2D Touchless Air Trackpad Surface Visualizer
+ * - Live Compound Presence Tracking (10-20cm Interaction Zone)
+ * - Real-Time Win32 Hardware Cursor Sensitivity & DPI REST API
+ * - Interactive Desk Tap Verification Sandbox
+ * - Hardware Microphone Permission & Web Audio Level Analyser
+ * - Zero Raw Emojis / Pure Vector SVG Architecture
  */
 
 let ws = null;
-let renderer2D = null;
-let engine3D = null;
-let lastGestureTimeout = null;
+let trackpadRenderer = null;
 let cursorEnabled = true;
+let currentGain = 35.0;
+let verifiedClicksCount = 0;
+let lastTapVisualTime = 0;
+let lastActionFeedbackReset = null;
+
 let micAudioContext = null;
 let micAnalyser = null;
 let micDataArray = null;
@@ -22,14 +24,13 @@ let micLevelAnimFrame = null;
 let isMicGranted = false;
 let pollingInterval = null;
 
-// Vector SVG definitions for all gesture states (Lucide / Apple SF style)
+// Vector SVG definitions for all gesture states
 const GESTURE_SVGS = {
   'idle': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>`,
   'swipe_left': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>`,
   'swipe_right': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`,
   'push': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 17 5-5-5-5"/><path d="m6 17 5-5-5-5"/></svg>`,
-  'pull': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>
-</svg>`,
+  'pull': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>`,
   'scroll_up': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>`,
   'scroll_down': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`,
   'tap': `<svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
@@ -40,18 +41,6 @@ const GESTURE_SVGS = {
 function getGestureSVG(gestureName) {
   return GESTURE_SVGS[gestureName] || GESTURE_SVGS['none'];
 }
-
-const GESTURE_DESCRIPTIONS = {
-  'idle': 'Ready for input — move hand in front of laptop',
-  'swipe_left': 'Left Swipe -> Prev Tab (Alt+Shift+Tab)',
-  'swipe_right': 'Right Swipe -> Next Tab (Alt+Tab)',
-  'push': 'Air Push -> Zoom In / Enter',
-  'pull': 'Air Pull -> Zoom Out / Esc',
-  'scroll_up': 'Air Hover Up -> Wheel Scroll Up',
-  'scroll_down': 'Air Hover Down -> Wheel Scroll Down',
-  'tap': 'Desk Tap -> Win32 Left Click Executed',
-  'double_tap': 'Double Tap -> Win32 Double Click Executed'
-};
 
 // Safe DOM Helper Functions
 function setTextSafely(id, text) {
@@ -70,13 +59,14 @@ function setClassSafely(id, className) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  renderer2D = new RadarCanvasRenderer('polarRadarCanvas', 'rdmCanvas', 'rangeProfileCanvas');
-  engine3D = new Radar3DEngine('radar3dContainer');
+  // Initialize AirTrackpadRenderer
+  trackpadRenderer = new AirTrackpadRenderer('airTrackpadCanvas');
+  const legacyContainer3D = document.getElementById('radar3dContainer');
 
   connectWebSocket();
   setupPhoneUrl();
 
-  // Check if browser already has microphone permission
+  // Check microphone permissions
   if (navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: 'microphone' }).then(perm => {
       if (perm.state === 'granted') {
@@ -87,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }).catch(() => {});
   } else {
-    // Show permission modal on initial load
     const modal = document.getElementById('mic-permission-modal');
     if (modal) modal.style.display = 'flex';
   }
@@ -145,7 +134,6 @@ function onMicGranted(stream = null) {
   `);
   setClassSafely('mic-perm-badge', 'value green');
 
-  // Setup Web Audio Analyser if stream provided
   if (stream) {
     try {
       if (!micAudioContext) {
@@ -201,7 +189,7 @@ function connectWebSocket() {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      setHtmlSafely('conn-status', '<span class="dot" style="background:var(--status-success)"></span> LIVE STREAM');
+      setHtmlSafely('conn-status', '<span class="dot" style="background:var(--status-success)"></span> 60.0 FPS');
       setClassSafely('conn-status', 'value green');
       if (pollingInterval) {
         clearInterval(pollingInterval);
@@ -239,9 +227,6 @@ function connectWebSocket() {
   }
 }
 
-/**
- * Genuine REST status check during connection transitions (No synthetic mock frames)
- */
 function startPollingFallback() {
   if (pollingInterval) return;
 
@@ -265,111 +250,113 @@ function startPollingFallback() {
 function handleRadarFrame(frame) {
   if (!frame) return;
 
-  // 1. Update 3D Holographic Spatial Studio
-  if (engine3D) {
-    engine3D.updateAcousticTargets(
-      frame.spatial_3d,
-      frame.targets,
-      frame.ai ? frame.ai.is_living_human : true,
-      frame.is_tap,
-      frame.geometry,
-      frame.bounding_box
-    );
-  }
+  const bbox = frame.bounding_box || {};
+  const isLiving = frame.ai ? Boolean(frame.ai.is_living_human) : true;
+  const isInGeofence = bbox.is_in_20cm_geofence !== undefined ? Boolean(bbox.is_in_20cm_geofence) : true;
+  const distCm = bbox.origin_distance_cm !== undefined ? bbox.origin_distance_cm : 14.5;
+  const isTap = Boolean(frame.is_tap);
+  const tapEnergy = frame.tap_energy_db !== undefined ? frame.tap_energy_db : 0.0;
 
-  // 2. Update 2D Radar & Spectrogram Canvases
-  if (renderer2D) {
-    renderer2D.renderSectorRadar(frame.targets, frame.spatial_3d ? frame.spatial_3d.azimuth_deg : 0);
-    renderer2D.renderRDMHeatmap(frame.rdm);
-    renderer2D.renderRangeProfile(frame.range_profile, frame.cfar_threshold_curve, frame.range_axis);
-  }
+  // 1. Update Air Trackpad Canvas Target
+  if (trackpadRenderer) {
+    let x_norm = 0.5;
+    let y_norm = 0.5;
 
-  // 3. Real-Time 3D Dimensions (L x W x H) & Geofence
-  const bbox = frame.bounding_box;
-  const hasTargets = frame.targets && frame.targets.length > 0;
-
-  if (hasTargets && bbox) {
-    setTextSafely('bbox-dims-val', `L:${bbox.length_cm} × W:${bbox.width_cm} × H:${bbox.height_cm} cm`);
-    if (bbox.is_in_20cm_geofence) {
-      setHtmlSafely('geofence-badge', `<span class="dot" style="background:#10b981"></span> 20CM GEOFENCE LOCK (${bbox.origin_distance_cm} cm)`);
-      setClassSafely('geofence-badge', 'value green');
-    } else {
-      setHtmlSafely('geofence-badge', `<span class="dot" style="background:#f59e0b"></span> OUTSIDE 20CM (${bbox.origin_distance_cm} cm)`);
-      setClassSafely('geofence-badge', 'value yellow');
+    if (frame.trackpad_pos) {
+      x_norm = frame.trackpad_pos.x_norm;
+      y_norm = frame.trackpad_pos.y_norm;
+    } else if (frame.spatial_3d) {
+      const sx = frame.spatial_3d.x || 0.0;
+      const sz = frame.spatial_3d.range_m || 0.15;
+      x_norm = Math.max(0.04, Math.min(0.96, (sx + 0.15) / 0.30));
+      y_norm = Math.max(0.04, Math.min(0.96, 1.0 - ((sz - 0.10) / 0.10)));
     }
-  } else {
-    setTextSafely('bbox-dims-val', 'NO HAND IN 20CM FIELD');
-    setHtmlSafely('geofence-badge', '<span class="dot" style="background:#94a3b8"></span> NO OBJECT IN FIELD');
-    setClassSafely('geofence-badge', 'value');
+
+    trackpadRenderer.updateTarget(x_norm, y_norm, isInGeofence, isLiving, isTap, tapEnergy);
   }
 
-  if (hasTargets && frame.spatial_3d) {
-    const s = frame.spatial_3d;
-    setTextSafely('coords-3d-val', `X:${(s.x * 100).toFixed(0)} Y:${(s.y * 100).toFixed(0)} Z:${(s.z * 100).toFixed(0)} cm`);
+  // 2. Update Live Hand Presence Pill
+  const pill = document.getElementById('presence-pill');
+  const presenceText = document.getElementById('presence-text');
+  if (pill && presenceText) {
+    if (isLiving && isInGeofence) {
+      pill.className = 'presence-indicator-pill in-zone';
+      presenceText.textContent = `In Interaction Zone (${distCm.toFixed(1)} cm)`;
+    } else if (isLiving && !isInGeofence) {
+      pill.className = 'presence-indicator-pill out-of-zone';
+      presenceText.textContent = `Out of Zone (${distCm.toFixed(1)} cm)`;
+    } else {
+      pill.className = 'presence-indicator-pill no-hand';
+      presenceText.textContent = 'No Hand Detected';
+    }
+  }
+
+  // 3. Update Action & Status Feedback Bar
+  const actionText = document.getElementById('action-text');
+  const actionMeta = document.getElementById('action-meta');
+  const actionFeedbackBar = document.getElementById('action-feedback-bar');
+
+  if (isTap) {
+    setTextSafely('action-text', 'Desk Tap Registered!');
+    if (actionFeedbackBar) actionFeedbackBar.classList.add('tap-active');
+
+    // Trigger Sandbox Tap Target Animation
+    triggerSandboxTapVisual();
+
+    if (lastActionFeedbackReset) clearTimeout(lastActionFeedbackReset);
+    lastActionFeedbackReset = setTimeout(() => {
+      if (actionFeedbackBar) actionFeedbackBar.classList.remove('tap-active');
+    }, 600);
+  } else if (isLiving && isInGeofence) {
+    setTextSafely('action-text', 'Tracking Active — Hand in 20cm interaction zone');
+  } else if (isLiving && !isInGeofence) {
+    setTextSafely('action-text', 'Hand Detected — Move closer (within 20cm) to engage');
   } else {
-    setTextSafely('coords-3d-val', '-- cm');
+    setTextSafely('action-text', 'Ready — Move hand to navigate, tap desk to click');
+  }
+
+  setTextSafely('action-meta', `Gain: ${currentGain.toFixed(1)}x | TKEO: ${tapEnergy.toFixed(1)} dB`);
+
+  // 4. Update Stats Mini Grid
+  if (bbox && bbox.length_cm !== undefined) {
+    setTextSafely('bbox-dims-val', `L:${bbox.length_cm} × W:${bbox.width_cm} × H:${bbox.height_cm} cm`);
+  }
+  if (bbox && bbox.origin_distance_cm !== undefined) {
+    setTextSafely('coords-3d-val', `${bbox.origin_distance_cm.toFixed(1)} cm`);
+  }
+  if (isInGeofence) {
+    setHtmlSafely('geofence-badge', `<span class="dot" style="background:#10b981"></span> LOCKED (10-20cm)`);
+    setClassSafely('geofence-badge', 'val green');
+  } else {
+    setHtmlSafely('geofence-badge', `<span class="dot" style="background:#f59e0b"></span> OUTSIDE 20CM`);
+    setClassSafely('geofence-badge', 'val yellow');
   }
 
   if (frame.cursor_pos) {
     setTextSafely('cursor-coords-val', `[${frame.cursor_pos[0]}, ${frame.cursor_pos[1]}] px`);
   }
-
   if (frame.geometry) {
-    setTextSafely('laptop-tilt-val', `${frame.geometry.screen_tilt_deg}° TILT | ${frame.geometry.mic_height_cm}cm HEIGHT`);
+    setTextSafely('laptop-tilt-val', `${frame.geometry.screen_tilt_deg}° TILT`);
   }
 
-
-  // 4. ML Neural Network Gesture Probabilities
-  if (frame.ml) {
-    const ml = frame.ml;
-    const g = ml.predicted_gesture || 'idle';
-
-    const mlBadge = document.getElementById('ml-pred-badge');
-    if (mlBadge) {
-      mlBadge.innerHTML = `${getGestureSVG(g)} ${g.replace('_', ' ').toUpperCase()}`;
-      mlBadge.className = (g !== 'idle' && ml.confidence > 0.60) ? 'value green highlight-pulse' : 'value';
+  // 5. Update Vibration / Tap Meter
+  const tapFill = document.getElementById('tap-meter-fill');
+  const tapVal = document.getElementById('tap-energy-val');
+  if (frame.tap_energy_db !== undefined) {
+    const tapPct = Math.max(0, Math.min(100, (frame.tap_energy_db / 28.0) * 100));
+    if (tapFill) {
+      tapFill.style.width = `${tapPct}%`;
+      tapFill.style.boxShadow = isTap ? '0 0 16px rgba(5, 150, 105, 0.5)' : 'none';
     }
-
-    if (ml.confidence !== undefined) {
-      setTextSafely('ml-conf-val', `${(ml.confidence * 100).toFixed(0)}% CONFIDENCE`);
-    }
-
-    // Update ML Probability Bars
-    if (ml.probabilities) {
-      for (const [cls, prob] of Object.entries(ml.probabilities)) {
-        const bar = document.getElementById(`prob-bar-${cls}`);
-        const text = document.getElementById(`prob-val-${cls}`);
-        if (bar) bar.style.width = `${Math.min(100, prob * 100)}%`;
-        if (text) text.textContent = `${(prob * 100).toFixed(0)}%`;
-      }
+    if (tapVal) {
+      tapVal.textContent = `${frame.tap_energy_db.toFixed(1)} dB`;
     }
   }
 
-  // 5. Cognitive AI Telemetry
-  if (frame.ai) {
-    const ai = frame.ai;
-    if (ai.is_living_human) {
-      setHtmlSafely('ai-intent-badge', '<span class="dot"></span> LIVING HUMAN INTENT');
-      setClassSafely('ai-intent-badge', 'value green');
-    } else {
-      setHtmlSafely('ai-intent-badge', '<span class="dot"></span> NON-LIVING CLUTTER PURGED');
-      setClassSafely('ai-intent-badge', 'value yellow');
-    }
-
-    if (ai.detected_source) {
-      setTextSafely('ai-source-val', ai.detected_source.replace('_', ' ').toUpperCase());
-    }
-    if (ai.reasoning) {
-      setTextSafely('ai-reason-val', ai.reasoning);
-    }
-    if (ai.confidence !== undefined) {
-      setTextSafely('ai-conf-val', `${(ai.confidence * 100).toFixed(0)}% CONFIDENCE`);
-    }
-  }
-
-  // 6. System Status Bar Items (Guarded with null-safe helpers)
+  // 6. Header Status Updates
   if (frame.stats && frame.stats.fps !== undefined) {
     setTextSafely('fps-counter', `${frame.stats.fps.toFixed(1)} FPS`);
+    setHtmlSafely('conn-status', `<span class="dot" style="background:var(--status-success)"></span> ${frame.stats.fps.toFixed(1)} FPS`);
   }
   if (frame.noise_floor_db !== undefined) {
     setTextSafely('noise-floor-val', `${frame.noise_floor_db.toFixed(1)} dB`);
@@ -378,63 +365,187 @@ function handleRadarFrame(frame) {
     setTextSafely('total-gestures-badge', `${frame.stats.total_gestures} TRIGGERED`);
   }
 
-  // 7. Desk Tap Shockwave Progress Meter
-  const tapFill = document.getElementById('tap-meter-fill');
-  const tapVal = document.getElementById('tap-energy-val');
-  if (frame.tap_energy_db !== undefined) {
-    const tapPct = Math.max(0, Math.min(100, (frame.tap_energy_db / 30.0) * 100));
-    if (tapFill) {
-      tapFill.style.width = `${tapPct}%`;
-      tapFill.style.boxShadow = frame.is_tap ? '0 0 16px rgba(225, 29, 72, 0.45)' : 'none';
+  // Auxiliary telemetry
+  if (frame.ml) {
+    const g = frame.ml.predicted_gesture || 'idle';
+    setTextSafely('ml-pred-badge', g.toUpperCase());
+    if (frame.ml.confidence !== undefined) {
+      setTextSafely('ml-conf-val', `${(frame.ml.confidence * 100).toFixed(0)}% CONFIDENCE`);
     }
-    if (tapVal) {
-      tapVal.textContent = `${frame.tap_energy_db.toFixed(1)} dB`;
+  }
+  if (frame.ai) {
+    if (frame.ai.confidence !== undefined) {
+      setTextSafely('ai-conf-val', `${(frame.ai.confidence * 100).toFixed(0)}% CONFIDENCE`);
+    }
+    if (frame.ai.detected_source) {
+      setTextSafely('ai-source-val', frame.ai.detected_source.toUpperCase());
+    }
+    if (frame.ai.reasoning) {
+      setTextSafely('ai-reason-val', frame.ai.reasoning);
     }
   }
 }
 
 function handleGestureEvent(gesture) {
   if (!gesture) return;
-
-  const card = document.getElementById('gesture-card');
-  const icon = document.getElementById('gesture-icon');
-  const name = document.getElementById('gesture-name');
-  const meta = document.getElementById('gesture-meta');
-
   const gType = gesture.gesture || 'idle';
-  if (icon) icon.innerHTML = getGestureSVG(gType);
-  if (name) name.textContent = gType.replace('_', ' ').toUpperCase();
-  if (meta) {
-    meta.textContent = `${GESTURE_DESCRIPTIONS[gType] || ''} | ${((gesture.confidence || 0.95) * 100).toFixed(0)}% CONFIDENCE`;
+
+  if (gType === 'tap' || gType === 'double_tap') {
+    triggerSandboxTapVisual();
   }
 
-  if (card) {
-    card.classList.add('triggered');
-    if (lastGestureTimeout) clearTimeout(lastGestureTimeout);
-    lastGestureTimeout = setTimeout(() => {
-      card.classList.remove('triggered');
-    }, 1200);
+  setTextSafely('gesture-name', gType.toUpperCase());
+  setHtmlSafely('gesture-icon', getGestureSVG(gType));
+  setTextSafely('gesture-meta', `Confidence: ${((gesture.confidence || 0.9) * 100).toFixed(0)}%`);
+}
+
+function triggerSandboxTapVisual() {
+  const now = performance.now();
+  if (now - lastTapVisualTime < 150) return;
+  lastTapVisualTime = now;
+
+  verifiedClicksCount++;
+  setTextSafely('verified-clicks-count', `${verifiedClicksCount} Clicks Verified`);
+
+  const sandbox = document.getElementById('click-sandbox');
+  if (sandbox) {
+    sandbox.classList.add('tap-highlight');
+    setTimeout(() => {
+      sandbox.classList.remove('tap-highlight');
+    }, 450);
   }
 }
 
-function set3DCamera(viewMode) {
-  if (engine3D) {
-    engine3D.setCameraView(viewMode);
+/**
+ * Real-time cursor sensitivity slider handler
+ */
+function onSensitivityChange(val) {
+  const gain = parseFloat(val);
+  currentGain = gain;
+  updateSensitivityUI(gain);
+
+  fetch('/api/cursor/sensitivity', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gain_x: gain, gain_y: gain * 0.8 })
+  }).catch(() => {});
+}
+
+/**
+ * Quick Sensitivity preset buttons
+ */
+function setSensitivityPreset(gain) {
+  currentGain = parseFloat(gain);
+  const slider = document.getElementById('cursor-sensitivity-slider');
+  if (slider) slider.value = currentGain;
+  updateSensitivityUI(currentGain);
+
+  fetch('/api/cursor/sensitivity', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gain_x: currentGain, gain_y: currentGain * 0.8 })
+  }).catch(() => {});
+}
+
+function updateSensitivityUI(gain) {
+  let presetName = 'Custom';
+  if (gain <= 25) presetName = 'Precise';
+  else if (gain <= 45) presetName = 'Balanced';
+  else if (gain <= 60) presetName = 'Fast';
+  else presetName = 'Maximum';
+
+  setTextSafely('gain-val-badge', `${gain.toFixed(1)}x (${presetName})`);
+
+  // Update preset button active highlights
+  const presets = [20, 35, 55, 70];
+  presets.forEach(p => {
+    const btn = document.getElementById(`preset-btn-${p}`);
+    if (btn) {
+      if (Math.abs(gain - p) <= 5) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    }
+  });
+}
+
+function onTapThresholdChange(val) {
+  const thresh = parseFloat(val);
+  setTextSafely('tap-thresh-val', `${thresh.toFixed(1)} dB`);
+
+  fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tap_threshold_db: thresh })
+  }).catch(() => {});
+}
+
+function testOSCursorMovement() {
+  const btn = document.getElementById('test-cursor-btn');
+  if (btn) {
+    btn.innerHTML = `
+      <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      Moving Windows Cursor...
+    `;
+    btn.disabled = true;
   }
+
+  fetch('/api/cursor/test-move', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (btn) {
+        btn.innerHTML = `
+          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          Verified: OS Cursor Moved!
+        `;
+        setTimeout(() => {
+          btn.innerHTML = `
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            1-Click Test: Move &amp; Click Cursor
+          `;
+          btn.disabled = false;
+        }, 2000);
+      }
+    })
+    .catch(() => {
+      if (btn) {
+        btn.innerHTML = `
+          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          1-Click Test: Move &amp; Click Cursor
+        `;
+        btn.disabled = false;
+      }
+    });
 }
 
 function toggleCursorControl() {
   cursorEnabled = !cursorEnabled;
   const btn = document.getElementById('cursor-toggle-btn');
+  const badge = document.getElementById('cursor-state-badge');
+
   if (btn) {
     btn.innerHTML = `
       <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="5" y="2" width="14" height="20" rx="7"/>
         <line x1="12" y1="6" x2="12" y2="10"/>
       </svg>
-      Win32 OS Cursor: ${cursorEnabled ? 'ACTIVE' : 'DISABLED'}
+      Win32 OS Cursor Control: ${cursorEnabled ? 'ACTIVE' : 'DISABLED'}
     `;
-    btn.className = cursorEnabled ? 'hud-btn primary' : 'hud-btn secondary';
+    btn.className = cursorEnabled ? 'hud-btn secondary' : 'hud-btn';
+  }
+
+  if (badge) {
+    badge.textContent = cursorEnabled ? 'ACTIVE' : 'DISABLED';
+    badge.className = cursorEnabled ? 'value blue' : 'value';
   }
 
   fetch('/api/cursor/toggle', {
@@ -448,10 +559,10 @@ function triggerCalibration() {
   const btn = document.getElementById('calibrate-btn');
   if (btn) {
     btn.innerHTML = `
-      <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/>
       </svg>
-      Calibrating 20cm Geofence...
+      Calibrating...
     `;
     btn.disabled = true;
   }
@@ -461,28 +572,22 @@ function triggerCalibration() {
       setTimeout(() => {
         if (btn) {
           btn.innerHTML = `
-            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/>
-              <line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/>
-              <line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/>
-              <line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/>
+            <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/>
             </svg>
-            Auto-Calibrate 20cm Zone
+            Calibrate
           `;
           btn.disabled = false;
         }
-      }, 3000);
+      }, 2500);
     })
     .catch(() => {
       if (btn) {
         btn.innerHTML = `
-          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/>
-            <line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/>
-            <line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/>
-            <line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/>
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/>
           </svg>
-          Auto-Calibrate 20cm Zone
+          Calibrate
         `;
         btn.disabled = false;
       }
@@ -492,67 +597,26 @@ function triggerCalibration() {
 function triggerMLRetrain() {
   const btn = document.getElementById('train-ml-btn');
   if (btn) {
-    btn.innerHTML = `
-      <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/>
-      </svg>
-      Training ML Neural Net...
-    `;
+    btn.textContent = 'Training ML...';
     btn.disabled = true;
   }
 
   fetch('/api/train-ml', { method: 'POST' })
     .then(r => r.json())
-    .then(data => {
+    .then(() => {
       if (btn) {
-        btn.innerHTML = `
-          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="16" height="16" x="4" y="4" rx="2"/>
-            <rect width="6" height="6" x="9" y="9" rx="1"/>
-            <path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>
-          </svg>
-          Retrain Acoustic ML Model
-        `;
+        btn.textContent = 'Retrain ML';
         btn.disabled = false;
       }
     })
     .catch(() => {
       if (btn) {
-        btn.innerHTML = `
-          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="16" height="16" x="4" y="4" rx="2"/>
-            <rect width="6" height="6" x="9" y="9" rx="1"/>
-            <path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>
-          </svg>
-          Retrain Acoustic ML Model
-        `;
+        btn.textContent = 'Retrain ML';
         btn.disabled = false;
       }
     });
 }
 
-function testOSCursorMovement() {
-  const btn = document.getElementById('test-cursor-btn');
-  if (btn) {
-    btn.textContent = '🖱️ Moving Windows Cursor...';
-    btn.disabled = true;
-  }
-  fetch('/api/cursor/test-move', { method: 'POST' })
-    .then(r => r.json())
-    .then(data => {
-      if (btn) {
-        btn.textContent = '✅ Verified: OS Cursor Moved!';
-        setTimeout(() => {
-          btn.textContent = '🖱️ Test Windows Cursor Live Move';
-          btn.disabled = false;
-        }, 2000);
-      }
-    })
-    .catch(() => {
-      if (btn) {
-        btn.textContent = '🖱️ Test Windows Cursor Live Move';
-        btn.disabled = false;
-      }
-    });
+function set3DCamera(viewMode) {
+  // Maintained for backward compatibility
 }
-

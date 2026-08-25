@@ -258,7 +258,7 @@ def benchmark_tkeo_tap_detection() -> Dict[str, Any]:
 
 def benchmark_one_euro_filter() -> Dict[str, Any]:
     print_banner("5. 1-Euro Adaptive Lowpass Filter Dynamics")
-    filt = OneEuroFilter(min_cutoff=0.6, beta=0.08, d_cutoff=1.0)
+    filt = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
     results = {}
 
     # 1. Tremor Suppression (10 Hz micro-jitter)
@@ -278,11 +278,12 @@ def benchmark_one_euro_filter() -> Dict[str, Any]:
     results["tremor_attenuation_db"] = round(attenuation_db, 2)
 
     # 2. Fast Ballistic Stroke Lag (v = 3000 px/s)
-    filt_ballistic = OneEuroFilter(min_cutoff=0.6, beta=0.08, d_cutoff=1.0)
+    filt_ballistic = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
     raw_ballistic = 200.0 + 3000.0 * t[:50]
     filt_out = [filt_ballistic.filter(float(x), ts) for x, ts in zip(raw_ballistic, t[:50])]
     errors = np.abs(np.array(raw_ballistic[15:]) - np.array(filt_out[15:]))
     mean_lag_ms = (float(np.mean(errors)) / 3000.0) * 1000.0
+
 
     results["ballistic_lag_ms"] = round(mean_lag_ms, 2)
 

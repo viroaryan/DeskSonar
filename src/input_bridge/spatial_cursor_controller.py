@@ -9,6 +9,7 @@ Combines:
 import time
 import math
 import ctypes
+import threading
 from typing import Dict, Any, Optional, Tuple
 
 try:
@@ -25,7 +26,7 @@ class OneEuroFilter:
     Provides jitter elimination at rest and zero-lag tracking at high speeds.
     """
 
-    def __init__(self, min_cutoff: float = 0.8, beta: float = 0.06, d_cutoff: float = 1.0):
+    def __init__(self, min_cutoff: float = 0.35, beta: float = 0.018, d_cutoff: float = 1.0):
         self.min_cutoff = min_cutoff
         self.beta = beta
         self.d_cutoff = d_cutoff
@@ -59,6 +60,11 @@ class OneEuroFilter:
 
         return x_hat
 
+    def reset(self) -> None:
+        self.x_prev = None
+        self.dx_prev = 0.0
+        self.t_prev = None
+
 
 class SpatialCursorController:
     """
@@ -77,7 +83,7 @@ class SpatialCursorController:
         azimuth_fov_deg: float = 24.0,
         min_range_m: float = 0.04,
         max_range_m: float = 0.20,
-        click_cooldown_s: float = 0.20,
+        click_cooldown_s: float = 0.05,
         gain_x: float = 25.0,
         gain_y: float = 20.0,
         motion_threshold: float = 1.0e-7  # Microvolt hardware threshold
@@ -103,11 +109,75 @@ class SpatialCursorController:
         self.cursor_x = float(self.screen_w // 2)
         self.cursor_y = float(self.screen_h // 2)
 
-        self.filter_x = OneEuroFilter(min_cutoff=0.6, beta=0.08)
-        self.filter_y = OneEuroFilter(min_cutoff=0.6, beta=0.08)
+        self.filter_x = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
+        self.filter_y = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
 
         self._last_click_time: float = 0.0
         self._last_scroll_time: float = 0.0
+
+    # Sensitivity & Gain Management
+    def get_gain_x(self) -> float:
+        return self.gain_x
+
+    def set_gain_x(self, gain: float) -> float:
+        self.gain_x = float(max(0.1, gain))
+        return self.gain_x
+
+    def get_gain_y(self) -> float:
+        return self.gain_y
+
+    def set_gain_y(self, gain: float) -> float:
+        self.gain_y = float(max(0.1, gain))
+        return self.gain_y
+
+    def get_motion_threshold(self) -> float:
+        return self.motion_threshold
+
+    def set_motion_threshold(self, threshold: float) -> float:
+        self.motion_threshold = float(max(0.0, threshold))
+        return self.motion_threshold
+
+    def get_sensitivity(self) -> Dict[str, float]:
+        return {
+            "gain_x": self.gain_x,
+            "gain_y": self.gain_y,
+            "motion_threshold": self.motion_threshold
+        }
+
+    def set_sensitivity(
+        self,
+        gain_x: Optional[float] = None,
+        gain_y: Optional[float] = None,
+        motion_threshold: Optional[float] = None
+    ) -> Dict[str, float]:
+        if gain_x is not None:
+            self.set_gain_x(gain_x)
+        if gain_y is not None:
+            self.set_gain_y(gain_y)
+        if motion_threshold is not None:
+            self.set_motion_threshold(motion_threshold)
+        return self.get_sensitivity()
+
+    def reset_filter(self) -> None:
+        self.filter_x.reset()
+        self.filter_y.reset()
+
+    def set_position(self, x: float, y: float) -> Tuple[int, int]:
+        self.cursor_x = max(0.0, min(float(self.screen_w - 1), x))
+        self.cursor_y = max(0.0, min(float(self.screen_h - 1), y))
+        self.filter_x.reset()
+        self.filter_y.reset()
+        smooth_x = int(self.cursor_x)
+        smooth_y = int(self.cursor_y)
+        if HAVE_WIN32:
+            try:
+                user32.SetCursorPos(smooth_x, smooth_y)
+            except Exception:
+                pass
+        return (smooth_x, smooth_y)
+
+    def get_position(self) -> Tuple[int, int]:
+        return (int(self.cursor_x), int(self.cursor_y))
 
     def update_continuous_air_mouse(
         self,
@@ -115,21 +185,36 @@ class SpatialCursorController:
         d_phi_l: float,
         d_phi_r: float,
         total_motion: float,
-        timestamp: float
+        timestamp: float,
+        is_living_human: bool = True,
+        is_in_geofence: bool = True,
+        presence_state: str = "ACTIVE_TRACKING"
     ) -> Optional[Tuple[int, int]]:
         """
         Updates Windows hardware cursor via continuous phase-shift delta accumulation.
+        Pure Differential Velocity Tracking:
+            dx = (d_phi_l - d_phi_r) * self.gain_x
+            dy = -((d_phi_l + d_phi_r) * self.gain_y)
+        Gated by compound living human and geofence detection.
         """
         if not self.enabled or not HAVE_WIN32:
             return None
 
+        # Compound Presence Gating: strictly reject non-living or out-of-geofence signals
+        if not is_living_human or not is_in_geofence or presence_state == "NO_HAND":
+            return None
+
         # Only move if acoustic motion energy is detected above hardware floor
         if total_motion > self.motion_threshold:
-            dx = (inter_channel_phase * self.gain_x) + ((d_phi_l - d_phi_r) * (self.gain_x * 0.4))
+            # Pure differential velocity tracking: lateral delta is difference of phase velocities, vertical delta is common-mode
+            dx = (d_phi_l - d_phi_r) * self.gain_x
             dy = -((d_phi_l + d_phi_r) * self.gain_y)
 
-            if abs(dx) < 0.15: dx = 0.0
-            if abs(dy) < 0.15: dy = 0.0
+            # Sub-pixel deadband to suppress micro-fluctuations
+            if abs(dx) < 0.15:
+                dx = 0.0
+            if abs(dy) < 0.15:
+                dy = 0.0
 
             if dx != 0.0 or dy != 0.0:
                 self.cursor_x = max(0.0, min(float(self.screen_w - 1), self.cursor_x + dx))
@@ -197,8 +282,11 @@ class SpatialCursorController:
 
         return self.set_screen_pixel(raw_x, raw_y, is_living_human, confidence, timestamp)
 
-
     def execute_desk_click(self, is_double_click: bool = False) -> None:
+        """
+        Non-blocking Win32 desk tap click dispatch.
+        Eliminates blocking time.sleep calls on the audio DSP thread.
+        """
         if not self.enabled or not HAVE_WIN32:
             return
 
@@ -208,14 +296,23 @@ class SpatialCursorController:
         self._last_click_time = now
 
         try:
-            user32.mouse_event(self.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-            time.sleep(0.01)
-            user32.mouse_event(self.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-
             if is_double_click:
-                time.sleep(0.08)
+                # Dispatch double-click asynchronously in background daemon thread
+                def _async_double_click():
+                    try:
+                        user32.mouse_event(self.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                        user32.mouse_event(self.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+                        time.sleep(0.04)
+                        user32.mouse_event(self.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                        user32.mouse_event(self.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+                    except Exception:
+                        pass
+
+                t = threading.Thread(target=_async_double_click, daemon=True)
+                t.start()
+            else:
+                # Instantaneous single click (0ms delay)
                 user32.mouse_event(self.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-                time.sleep(0.01)
                 user32.mouse_event(self.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
         except Exception:
             pass
@@ -239,24 +336,29 @@ class SpatialCursorController:
         if not self.enabled or not HAVE_WIN32:
             return
 
-        try:
-            VK_MENU = 0x12
-            VK_TAB = 0x09
-            VK_SHIFT = 0x10
-            KEYEVENTF_KEYUP = 0x0002
+        def _async_window_wave():
+            try:
+                VK_MENU = 0x12
+                VK_TAB = 0x09
+                VK_SHIFT = 0x10
+                KEYEVENTF_KEYUP = 0x0002
 
-            user32.keybd_event(VK_MENU, 0, 0, 0)
-            if direction == "left":
-                user32.keybd_event(VK_SHIFT, 0, 0, 0)
-            user32.keybd_event(VK_TAB, 0, 0, 0)
-            time.sleep(0.02)
-            user32.keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0)
-            if direction == "left":
-                user32.keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0)
-            user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
-        except Exception:
-            pass
+                user32.keybd_event(VK_MENU, 0, 0, 0)
+                if direction == "left":
+                    user32.keybd_event(VK_SHIFT, 0, 0, 0)
+                user32.keybd_event(VK_TAB, 0, 0, 0)
+                time.sleep(0.02)
+                user32.keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0)
+                if direction == "left":
+                    user32.keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0)
+                user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_async_window_wave, daemon=True)
+        t.start()
 
     def set_enabled(self, enabled: bool) -> bool:
         self.enabled = enabled
         return self.enabled
+

@@ -180,6 +180,68 @@ class TestF3BiomechanicalBoundaries:
         assert res.is_living_human is False
         assert res.source_type == SignalSourceType.STATIONARY_OBJECT
 
+    def test_f3_b06_asli_speech_leakage_rejection(self, intent_classifier, cursor_controller):
+        """Verify acoustic speech leakage (>15 dB ASLI) is rejected and suppresses cursor movement."""
+        t = np.arange(1920) / 48000.0
+        speech = (0.7 * np.sin(2.0 * np.pi * 500.0 * t) + 0.5 * np.sin(2.0 * np.pi * 1200.0 * t)).astype(np.float32)
+        ultra = (0.01 * np.sin(2.0 * np.pi * 20000.0 * t)).astype(np.float32)
+        raw_audio = speech + ultra
+
+        asli = intent_classifier.compute_asli(raw_audio)
+        assert asli > 15.0, f"Expected ASLI > 15.0 dB, got {asli}"
+
+        res = intent_classifier.classify_frame(
+            raw_audio=raw_audio,
+            filtered_ultrasonic=ultra,
+            measured_range_m=0.15,
+            measured_velocity_m_s=0.10,
+            instantaneous_phase_rad=0.0,
+            snr_db=12.0,
+            dt=0.04
+        )
+        assert res.is_living_human is False
+        assert res.source_type == SignalSourceType.ACOUSTIC_SPEECH_LEAKAGE
+
+        # Cursor must not move when speech leakage is detected
+        cursor_controller.enabled = True
+        cursor_controller.set_position(960, 540)
+        pos = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.8,
+            d_phi_l=0.5,
+            d_phi_r=0.5,
+            total_motion=0.2,
+            timestamp=time.time(),
+            is_living_human=res.is_living_human,
+            is_in_geofence=res.is_within_geofence,
+            presence_state=res.presence_state
+        )
+        assert pos is None
+        assert cursor_controller.get_position() == (960, 540)
+
+    def test_f3_b07_mechanical_fan_noise_rejection(self, intent_classifier):
+        """Verify mechanical fan noise (narrowband tonal peak, entropy < 0.25) rejection rate >= 95%."""
+        t = np.arange(1920) / 48000.0
+        rejections = 0
+        n_trials = 100
+        for i in range(n_trials):
+            fan_f = 19600.0 + (i % 8) * 100.0
+            fan_sig = (0.5 * np.sin(2.0 * np.pi * fan_f * t) + 0.05 * np.random.normal(0, 0.05, 1920)).astype(np.float32)
+            res = intent_classifier.classify_frame(
+                raw_audio=fan_sig,
+                filtered_ultrasonic=fan_sig,
+                measured_range_m=0.14,
+                measured_velocity_m_s=0.005,
+                instantaneous_phase_rad=0.0,
+                snr_db=15.0,
+                dt=0.04
+            )
+            if not res.is_living_human:
+                rejections += 1
+
+        rejection_rate = rejections / n_trials
+        assert rejection_rate >= 0.95, f"Expected fan rejection >= 95%, got {rejection_rate * 100}%"
+
+
 
 class TestF4GeofenceBoundaries:
     """F4 Boundary Cases: 0.199m vs 0.201m Margins & Singularity Tests"""
@@ -265,6 +327,47 @@ class TestF4GeofenceBoundaries:
         assert bbox.width_cm <= 16.0
         assert bbox.height_cm <= 8.0
 
+    def test_f4_b06_schmitt_trigger_10_20cm_boundaries(self, spatial_calibrator):
+        """Test 10-20cm Schmitt trigger boundaries: 9.5cm vs 10.5cm, 19.5cm vs 20.5cm."""
+        spatial_calibrator.reset_zone_state()
+        # Entry zone: 10.0cm - 19.0cm
+        assert spatial_calibrator.is_within_interaction_zone(0.095) is False
+        assert spatial_calibrator.is_within_interaction_zone(0.105) is True
+
+        # Retention zone: 8.5cm - 21.5cm (when already inside)
+        assert spatial_calibrator.is_within_interaction_zone(0.195) is True
+        assert spatial_calibrator.is_within_interaction_zone(0.205) is True
+        assert spatial_calibrator.is_within_interaction_zone(0.220) is False
+
+    def test_f4_b07_absent_target_null_safety_no_ghost(self, spatial_calibrator, intent_classifier):
+        """Verify that absent target (None) returns False and does not synthesize a fake 0.15m ghost target."""
+        spatial_calibrator.reset_zone_state()
+        assert spatial_calibrator.is_within_interaction_zone(None) is False
+
+        bbox = spatial_calibrator.calculate_3d_bounding_box(
+            range_m=None,
+            azimuth_deg=0.0,
+            phase_disp_mm=0.0,
+            range_profile_db=np.zeros(64),
+            cfar_curve_db=np.ones(64),
+            range_axis_m=np.linspace(0.04, 1.2, 64)
+        )
+        assert bbox.is_in_20cm_geofence is False
+        assert bbox.origin_distance_cm == 999.0
+
+        res = intent_classifier.classify_frame(
+            raw_audio=np.zeros(100, dtype=np.float32),
+            filtered_ultrasonic=np.zeros(100, dtype=np.float32),
+            measured_range_m=None,
+            measured_velocity_m_s=None,
+            instantaneous_phase_rad=0.0,
+            snr_db=0.0,
+            dt=0.04
+        )
+        assert res.is_within_geofence is False
+        assert res.is_living_human is False
+
+
 
 class TestF5CursorBoundaries:
     """F5 Boundary Cases: Desktop Pixel Clamping & Jitter Deadband"""
@@ -330,6 +433,28 @@ class TestF5CursorBoundaries:
         res = cursor_controller.update_continuous_air_mouse(10.0, 10.0, 10.0, 1.0, time.time())
         assert res is None
         assert cursor_controller.cursor_x == 500.0
+
+    def test_f5_b06_stationary_hand_static_azimuth_zero_drift(self, cursor_controller):
+        """Verify stationary hand at various static azimuth angles (0.0, 0.5, 1.2 rad) produces exactly 0.0 px drift."""
+        cursor_controller.enabled = True
+        cursor_controller.set_position(960, 540)
+
+        for static_azimuth_rad in [0.0, 0.5, 1.2]:
+            for i in range(30):
+                pos = cursor_controller.update_continuous_air_mouse(
+                    inter_channel_phase=static_azimuth_rad,
+                    d_phi_l=0.0,
+                    d_phi_r=0.0,
+                    total_motion=0.0,
+                    timestamp=time.time() + i * 0.033,
+                    is_living_human=True,
+                    is_in_geofence=True,
+                    presence_state="ACTIVE_TRACKING"
+                )
+                assert pos == (960, 540), f"Drift detected at azimuth {static_azimuth_rad}: pos={pos}"
+
+            assert cursor_controller.get_position() == (960, 540)
+
 
 
 class TestF6TKEOTapBoundaries:

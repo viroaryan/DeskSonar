@@ -301,3 +301,132 @@ class TestCrossFeatureCombinations:
         # Valid range axis covers 4cm to ~0.9m
         assert frame.range_axis_m[0] <= 0.10
         assert frame.range_axis_m[-1] >= 0.85
+
+    def test_tier3_13_dynamic_sensitivity_adjustment_during_motion(self, cursor_controller):
+        """Verify dynamic sensitivity change during continuous active hand motion scales differential velocity immediately."""
+        cursor_controller.enabled = True
+        cursor_controller.set_position(960, 540)
+        cursor_controller.set_sensitivity(gain_x=25.0, gain_y=20.0, motion_threshold=0.001)
+
+        t0 = 100.0
+        pos1 = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.0,
+            d_phi_l=0.2,
+            d_phi_r=-0.2,
+            total_motion=0.05,
+            timestamp=t0,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert pos1 is not None
+        dx1 = pos1[0] - 960
+
+        cursor_controller.set_position(960, 540)
+        cursor_controller.set_sensitivity(gain_x=50.0, gain_y=40.0)
+
+        pos2 = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.0,
+            d_phi_l=0.2,
+            d_phi_r=-0.2,
+            total_motion=0.05,
+            timestamp=t0 + 0.04,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert pos2 is not None
+        dx2 = pos2[0] - 960
+
+        assert dx2 > dx1 * 1.5
+
+    def test_tier3_14_simultaneous_desk_tap_and_hand_motion(
+        self, dsp_pipeline, gesture_detector, acoustic_factory, cursor_controller
+    ):
+        """Simultaneous physical desk tap click and continuous differential hand tracking."""
+        cursor_controller.enabled = True
+        cursor_controller.set_position(960, 540)
+
+        hand_echo = acoustic_factory.generate_target_echo(range_m=0.14, velocity_m_s=0.15, target_snr_linear=0.8)
+        tap_wave = acoustic_factory.generate_tap_shockwave(tap_energy_amp=0.9)
+        composite = hand_echo + tap_wave
+
+        t_now = time.time()
+        frame = dsp_pipeline.process_audio_frame(composite, timestamp=t_now)
+
+        assert frame.is_tap_candidate is True
+        ev = gesture_detector.process_frame(frame)
+        assert ev is not None
+        assert ev.gesture == GestureType.TAP
+
+        t_click_start = time.perf_counter()
+        cursor_controller.execute_desk_click(is_double_click=False)
+        click_duration_ms = (time.perf_counter() - t_click_start) * 1000.0
+        assert click_duration_ms < 15.0
+
+        pos = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=frame.inter_channel_phase,
+            d_phi_l=frame.d_phi_l,
+            d_phi_r=frame.d_phi_r,
+            total_motion=frame.motion_energy,
+            timestamp=t_now,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert pos is not None
+        assert 0 <= pos[0] <= cursor_controller.screen_w
+        assert 0 <= pos[1] <= cursor_controller.screen_h
+
+    def test_tier3_15_speech_leakage_during_active_tracking(
+        self, dsp_pipeline, intent_classifier, cursor_controller, acoustic_factory
+    ):
+        """Background ambient speech injected during active tracking suppresses false jumps."""
+        cursor_controller.enabled = True
+        cursor_controller.set_position(960, 540)
+
+        hand_echo = acoustic_factory.generate_target_echo(range_m=0.14, velocity_m_s=0.12, target_snr_linear=0.8)
+        frame_hand = dsp_pipeline.process_audio_frame(hand_echo, timestamp=100.0)
+
+        for v in [0.04, 0.08, 0.12]:
+            res_hand = intent_classifier.classify_frame(
+                raw_audio=hand_echo[:, 0],
+                filtered_ultrasonic=hand_echo[:, 0],
+                measured_range_m=0.14,
+                measured_velocity_m_s=v,
+                instantaneous_phase_rad=0.5,
+                snr_db=18.0,
+                dt=0.04
+            )
+        assert res_hand.is_living_human is True
+        assert res_hand.presence_state == "ACTIVE_TRACKING"
+
+        t_arr = np.arange(1920) / 48000.0
+        speech_blast = (0.9 * np.sin(2.0 * np.pi * 650.0 * t_arr) + 0.7 * np.sin(2.0 * np.pi * 1800.0 * t_arr)).astype(np.float32)
+        speech_frame = np.column_stack([speech_blast, speech_blast])
+
+        res_speech = intent_classifier.classify_frame(
+            raw_audio=speech_frame[:, 0],
+            filtered_ultrasonic=hand_echo[:, 0] * 0.05,
+            measured_range_m=0.14,
+            measured_velocity_m_s=0.50,
+            instantaneous_phase_rad=0.0,
+            snr_db=10.0,
+            dt=0.04
+        )
+        assert res_speech.source_type == SignalSourceType.ACOUSTIC_SPEECH_LEAKAGE
+        assert res_speech.is_living_human is False
+
+        pos_suppressed = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=2.5,
+            d_phi_l=1.8,
+            d_phi_r=-1.8,
+            total_motion=0.9,
+            timestamp=100.08,
+            is_living_human=res_speech.is_living_human,
+            is_in_geofence=res_speech.is_within_geofence,
+            presence_state=res_speech.presence_state
+        )
+        assert pos_suppressed is None
+        assert cursor_controller.get_position() == (960, 540)
+

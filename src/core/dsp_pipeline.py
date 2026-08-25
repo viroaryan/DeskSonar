@@ -306,10 +306,24 @@ class DSPPipeline:
             )
             for t in confirmed_tracks
         ]
-        dominant_target = targets[0] if len(targets) > 0 else None
+        if len(targets) > 0:
+            dominant_target = targets[0]
+        elif len(raw_measurements) > 0:
+            best_m = raw_measurements[0]
+            dominant_target = RadarTarget(
+                range_m=round(best_m[0], 3),
+                velocity_m_s=round(best_m[1], 3),
+                azimuth_deg=round(self._last_azimuth_deg, 1),
+                snr_db=round(best_m[2], 1),
+                magnitude=round(best_m[3], 1),
+                is_approaching=(best_m[1] > 0.02),
+                track_id=None
+            )
+        else:
+            dominant_target = None
 
-        # 10. 3D Bounding Box & Geofence
-        target_r = dominant_target.range_m if dominant_target else 0.15
+        # 10. 3D Bounding Box & Geofence (Target Null Safety: None when no CFAR peak)
+        target_r = dominant_target.range_m if dominant_target else None
         bbox_3d = self.plane_calibrator.calculate_3d_bounding_box(
             range_m=target_r,
             azimuth_deg=self._last_azimuth_deg,
@@ -327,11 +341,11 @@ class DSPPipeline:
             screen_height_px=self.screen_h
         )
 
-        # 11. Intent & Living Motion Classifier
+        # 11. Intent & Living Motion Classifier (Target Null Safety)
         intent_res = self.intent_classifier.classify_frame(
             raw_audio=ch_left,
             filtered_ultrasonic=filt_left,
-            measured_range_m=dominant_target.range_m if dominant_target else 0.15,
+            measured_range_m=dominant_target.range_m if dominant_target else None,
             measured_velocity_m_s=dominant_target.velocity_m_s if dominant_target else (d_phi_l * 0.1),
             instantaneous_phase_rad=phase_l,
             snr_db=dominant_target.snr_db if dominant_target else (total_motion_energy * 1000.0),
@@ -380,12 +394,25 @@ class DSPPipeline:
         train = self.cfar_train
         threshold_curve = np.full(n_cells, self._ambient_noise_floor_db + 12.0)
 
-        for i in range(train + guard, n_cells - train - guard):
-            left_cells = range_db[i - guard - train : i - guard]
-            right_cells = range_db[i + guard + 1 : i + guard + train + 1]
+        for i in range(1, n_cells - 1):
+            left_start = max(0, i - guard - train)
+            left_end = max(0, i - guard)
+            right_start = min(n_cells, i + guard + 1)
+            right_end = min(n_cells, i + guard + train + 1)
 
-            noise_mean = 0.5 * (np.mean(left_cells) + np.mean(right_cells))
-            thresh = noise_mean + (self.cfar_factor * 4.5)
+            left_cells = range_db[left_start:left_end]
+            right_cells = range_db[right_start:right_end]
+
+            if len(left_cells) > 0 and len(right_cells) > 0:
+                noise_mean = min(float(np.mean(left_cells)), float(np.mean(right_cells)))
+            elif len(left_cells) > 0:
+                noise_mean = float(np.mean(left_cells))
+            elif len(right_cells) > 0:
+                noise_mean = float(np.mean(right_cells))
+            else:
+                noise_mean = self._ambient_noise_floor_db
+
+            thresh = max(self._ambient_noise_floor_db + 8.0, noise_mean + (self.cfar_factor * 3.5))
             threshold_curve[i] = thresh
 
             if range_db[i] > thresh and range_db[i] > range_db[i - 1] and range_db[i] > range_db[i + 1]:

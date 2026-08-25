@@ -42,7 +42,7 @@ class GestureDetector:
 
     def __init__(
         self,
-        tap_cooldown_s: float = 0.22,
+        tap_cooldown_s: float = 0.12,
         double_tap_max_interval_s: float = 0.45,
         gesture_cooldown_s: float = 0.35,
         push_pull_velocity_thresh: float = 0.07,
@@ -63,6 +63,15 @@ class GestureDetector:
 
         self._callbacks: List[Callable[[GestureEvent], None]] = []
 
+    def reset(self) -> None:
+        """Resets all internal gesture state machine buffers."""
+        self.last_tap_time = 0.0
+        self.last_gesture_time = 0.0
+        self.pending_tap_event = None
+        self.consecutive_push_frames = 0
+        self.consecutive_pull_frames = 0
+        self.last_scroll_displacement = 0.0
+
     def register_callback(self, callback: Callable[[GestureEvent], None]) -> None:
         self._callbacks.append(callback)
 
@@ -70,42 +79,45 @@ class GestureDetector:
         now = frame.timestamp
         detected_event: Optional[GestureEvent] = None
         intent = frame.intent_result
-        if intent and intent.source_type == SignalSourceType.ACOUSTIC_SPEECH_LEAKAGE:
-            # Reject audible speech from triggering false taps
-            pass
-        elif frame.is_tap_candidate and (now - self.last_tap_time > self.tap_cooldown_s):
-            # Reject if loud audible speech/music interference
-            if intent.source_type != SignalSourceType.ACOUSTIC_SPEECH_LEAKAGE:
-                tap_range = frame.dominant_target.range_m if frame.dominant_target else 0.15
-                tap_event = GestureEvent(
-                    gesture=GestureType.TAP,
+
+        # Auto-expire stale pending tap event beyond the double-tap window
+        if self.pending_tap_event and (now - self.pending_tap_event.timestamp >= self.double_tap_max_interval_s):
+            self.pending_tap_event = None
+
+        # 1. Physical Desk Tap Shockwave Detection (TKEO)
+        is_speech = bool(intent and intent.source_type == SignalSourceType.ACOUSTIC_SPEECH_LEAKAGE)
+        if not is_speech and frame.is_tap_candidate and (now - self.last_tap_time > self.tap_cooldown_s):
+            tap_range = frame.dominant_target.range_m if frame.dominant_target else 0.15
+            purity = intent.ultrasonic_purity if intent else 0.8
+            tap_event = GestureEvent(
+                gesture=GestureType.TAP,
+                timestamp=now,
+                confidence=min(1.0, max(0.5, frame.tap_energy_db / 28.0)),
+                range_m=tap_range,
+                velocity_m_s=0.0,
+                azimuth_deg=frame.azimuth_angle_deg,
+                energy_db=frame.tap_energy_db,
+                metadata={"type": "tkeo_shockwave", "purity": purity}
+            )
+
+            if self.pending_tap_event and (now - self.pending_tap_event.timestamp < self.double_tap_max_interval_s):
+                double_tap = GestureEvent(
+                    gesture=GestureType.DOUBLE_TAP,
                     timestamp=now,
-                    confidence=min(1.0, max(0.5, frame.tap_energy_db / 28.0)),
-                    range_m=tap_range,
+                    confidence=0.95,
+                    range_m=tap_event.range_m,
                     velocity_m_s=0.0,
                     azimuth_deg=frame.azimuth_angle_deg,
-                    energy_db=frame.tap_energy_db,
-                    metadata={"type": "tkeo_shockwave", "purity": intent.ultrasonic_purity}
+                    energy_db=max(tap_event.energy_db, self.pending_tap_event.energy_db),
+                    metadata={"interval_ms": (now - self.pending_tap_event.timestamp) * 1000}
                 )
-
-                if self.pending_tap_event and (now - self.pending_tap_event.timestamp < self.double_tap_max_interval_s):
-                    double_tap = GestureEvent(
-                        gesture=GestureType.DOUBLE_TAP,
-                        timestamp=now,
-                        confidence=0.95,
-                        range_m=tap_event.range_m,
-                        velocity_m_s=0.0,
-                        azimuth_deg=frame.azimuth_angle_deg,
-                        energy_db=max(tap_event.energy_db, self.pending_tap_event.energy_db),
-                        metadata={"interval_ms": (now - self.pending_tap_event.timestamp) * 1000}
-                    )
-                    self.pending_tap_event = None
-                    self.last_tap_time = now
-                    detected_event = double_tap
-                else:
-                    self.pending_tap_event = tap_event
-                    self.last_tap_time = now
-                    detected_event = tap_event
+                self.pending_tap_event = None
+                self.last_tap_time = now
+                detected_event = double_tap
+            else:
+                self.pending_tap_event = tap_event
+                self.last_tap_time = now
+                detected_event = tap_event
 
         # 2. Continuous Motion Gestures (Strictly Gated by Living Human Intent)
         target = frame.dominant_target
@@ -115,7 +127,9 @@ class GestureDetector:
             az = frame.azimuth_angle_deg
 
             # Only proceed if classifier confirms living human motion
-            if intent.is_living_human or intent.intent_confidence >= 0.55:
+            is_living = bool(intent.is_living_human) if intent else True
+            conf = float(intent.intent_confidence) if intent else 0.8
+            if is_living or conf >= 0.55:
 
                 # REAL DIRECTIONAL WAVE (Left / Right via Stereo Azimuth)
                 if abs(az) > 18.0 and abs(v) > 0.06:
@@ -123,7 +137,7 @@ class GestureDetector:
                     detected_event = GestureEvent(
                         gesture=wave_type,
                         timestamp=now,
-                        confidence=min(1.0, intent.intent_confidence),
+                        confidence=min(1.0, conf),
                         range_m=r,
                         velocity_m_s=v,
                         azimuth_deg=az,
@@ -140,7 +154,7 @@ class GestureDetector:
                         detected_event = GestureEvent(
                             gesture=GestureType.PUSH,
                             timestamp=now,
-                            confidence=min(1.0, intent.intent_confidence),
+                            confidence=min(1.0, conf),
                             range_m=r,
                             velocity_m_s=v,
                             azimuth_deg=az,
@@ -158,7 +172,7 @@ class GestureDetector:
                         detected_event = GestureEvent(
                             gesture=GestureType.PULL,
                             timestamp=now,
-                            confidence=min(1.0, intent.intent_confidence),
+                            confidence=min(1.0, conf),
                             range_m=r,
                             velocity_m_s=v,
                             azimuth_deg=az,
@@ -193,3 +207,4 @@ class GestureDetector:
                     pass
 
         return detected_event
+

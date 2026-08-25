@@ -34,7 +34,10 @@ class LaptopGeometryProfile:
 
 class SpatialPlaneCalibrator:
     """
-    Computes real-time laptop geometry, 20cm interaction geofence, and 3D hand bounding box.
+    Computes real-time laptop geometry, strict 10-20cm interaction geofence, and 3D hand bounding box.
+    Features dual-boundary Schmitt trigger hysteresis:
+    - Entry Zone: 10.0 cm <= R <= 19.0 cm (0.10m to 0.19m)
+    - Retention Zone: 8.5 cm <= R <= 21.5 cm (0.085m to 0.215m)
     """
 
     def __init__(
@@ -47,6 +50,7 @@ class SpatialPlaneCalibrator:
         self.screen_length = screen_length_m
         self.c = speed_of_sound
         self.geofence_radius_m = geofence_radius_m
+        self._in_interaction_zone: bool = False
 
         self.profile = LaptopGeometryProfile(
             screen_tilt_deg=default_tilt_deg,
@@ -56,6 +60,29 @@ class SpatialPlaneCalibrator:
             active_tracking_fov_z_m=0.20,   # 4cm to 20cm forward
             calibrated_at=0.0
         )
+
+    def is_within_interaction_zone(self, range_m: Optional[float]) -> bool:
+        """
+        Strict 10-20 cm Radial Geofencing with Schmitt Trigger Hysteresis:
+        - Entry Zone: 0.10 m <= R <= 0.19 m (10 to 19 cm)
+        - Retention Zone: 0.085 m <= R <= 0.215 m (8.5 to 21.5 cm)
+        If range_m is None or negative, returns False and resets state.
+        """
+        if range_m is None or range_m < 0.0:
+            self._in_interaction_zone = False
+            return False
+
+        if self._in_interaction_zone:
+            # Retention Zone with hysteresis
+            self._in_interaction_zone = (0.085 <= range_m <= 0.215)
+        else:
+            # Entry Zone
+            self._in_interaction_zone = (0.100 <= range_m <= 0.190)
+
+        return self._in_interaction_zone
+
+    def reset_zone_state(self) -> None:
+        self._in_interaction_zone = False
 
     def auto_calibrate_from_impulse_response(self, cir_profile: np.ndarray, range_axis: np.ndarray) -> LaptopGeometryProfile:
         """
@@ -85,7 +112,7 @@ class SpatialPlaneCalibrator:
 
     def calculate_3d_bounding_box(
         self,
-        range_m: float,
+        range_m: Optional[float],
         azimuth_deg: float,
         phase_disp_mm: float,
         range_profile_db: np.ndarray,
@@ -97,6 +124,22 @@ class SpatialPlaneCalibrator:
         Calculates real-time Length (Depth), Width (Breadth), and Height (Thickness)
         of the physical hand reflecting ultrasound within the 20cm geofence.
         """
+        above_cfar = np.where(range_profile_db > cfar_curve_db)[0]
+
+        if range_m is None:
+            if len(above_cfar) > 0 and len(range_axis_m) > 0:
+                peak_idx = above_cfar[int(np.argmax(range_profile_db[above_cfar]))]
+                range_m = float(range_axis_m[min(peak_idx, len(range_axis_m) - 1)])
+            else:
+                return HandBoundingBox3D(
+                    length_cm=0.0,
+                    width_cm=0.0,
+                    height_cm=0.0,
+                    origin_distance_cm=999.0,
+                    is_in_20cm_geofence=False,
+                    centroid_3d_m=(0.0, round(self.profile.mic_height_m, 3), 0.0)
+                )
+
         az_rad = math.radians(azimuth_deg)
         tilt_rad = math.radians(self.profile.screen_tilt_deg - 90.0)
 
@@ -111,7 +154,6 @@ class SpatialPlaneCalibrator:
 
         # 2. Length (Depth Span Delta Z in cm)
         # Find continuous range bins exceeding CFAR threshold around target peak
-        above_cfar = np.where(range_profile_db > cfar_curve_db)[0]
         if len(above_cfar) > 1:
             dr = range_axis_m[1] - range_axis_m[0] if len(range_axis_m) > 1 else 0.01
             span_bins = (above_cfar[-1] - above_cfar[0] + 1)
@@ -129,17 +171,17 @@ class SpatialPlaneCalibrator:
         height_cm = max(2.5, min(8.0, 3.5 + abs(phase_disp_mm) * 0.2))
 
         return HandBoundingBox3D(
-            length_cm=round(length_cm, 1),
-            width_cm=round(width_cm, 1),
-            height_cm=round(height_cm, 1),
-            origin_distance_cm=origin_dist_cm,
-            is_in_20cm_geofence=is_in_geofence,
-            centroid_3d_m=(round(x_m, 3), round(y_m, 3), round(z_m, 3))
+            length_cm=round(float(length_cm), 1),
+            width_cm=round(float(width_cm), 1),
+            height_cm=round(float(height_cm), 1),
+            origin_distance_cm=float(origin_dist_cm),
+            is_in_20cm_geofence=bool(is_in_geofence),
+            centroid_3d_m=(round(float(x_m), 3), round(float(y_m), 3), round(float(z_m), 3))
         )
 
     def project_3d_to_screen(
         self,
-        range_m: float,
+        range_m: Optional[float],
         azimuth_deg: float,
         phase_disp_mm: float,
         screen_width_px: int,
@@ -148,6 +190,9 @@ class SpatialPlaneCalibrator:
         """
         Transforms 3D hand position inside the 20cm geofence into Windows screen pixel coordinates.
         """
+        if range_m is None:
+            return screen_width_px // 2, screen_height_px // 2
+
         az_rad = math.radians(azimuth_deg)
         tilt_rad = math.radians(self.profile.screen_tilt_deg - 90.0)
 

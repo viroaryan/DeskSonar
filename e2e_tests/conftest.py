@@ -261,6 +261,7 @@ def asset_paths() -> Dict[str, Path]:
         "style.css": base_dir / "web" / "css" / "style.css",
         "app_js": base_dir / "web" / "js" / "app.js",
         "app.js": base_dir / "web" / "js" / "app.js",
+        "air_trackpad_canvas_js": base_dir / "web" / "js" / "air_trackpad_canvas.js",
         "radar_canvas_js": base_dir / "web" / "js" / "radar_canvas.js",
         "radar_canvas.js": base_dir / "web" / "js" / "radar_canvas.js",
         "radar_3d_engine_js": base_dir / "web" / "js" / "radar_3d_engine.js",

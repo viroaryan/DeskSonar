@@ -1,14 +1,14 @@
 """
-DeskSonar AI Spatial Radar & Cursor Control Server
+DeskSonar AI Spatial Radar & Minimalist Air Trackpad Server
 Integrates:
 - Real-Time Dual-Microphone Acoustic Sonar DSP (48 kHz Full-Duplex Authentic Hardware)
-- PyTorch / Vectorized Deep Neural Network Real-Time Gesture Classifier (<0.5ms)
 - Continuous Air Mouse Carrier Phase-Shift Delta Accumulator (LLAP / SoundWave)
 - Strict 20cm Spherical Origin Geofence & Hand Bounding Box Dimensions (L x W x H in cm)
 - Laptop Screen Tilt & Desk Height Real-Time Physical Auto-Calibrator
+- PyTorch / Vectorized Deep Neural Network Gesture Classifier (<0.5ms)
 - NVIDIA NIM Cloud Cognitive AI (Llama 3.1 & Vision Models)
 - Win32 Hardware Spatial OS Cursor & Window Controller
-- 3D Holographic WebSockets Telemetry Engine
+- Real-Time Streamlined WebSockets Telemetry Engine & Sensitivity REST API
 """
 import os
 import time
@@ -47,6 +47,12 @@ class ConfigUpdateRequest(BaseModel):
 
 class CursorToggleRequest(BaseModel):
     enabled: bool
+
+
+class SensitivityUpdateRequest(BaseModel):
+    gain_x: Optional[float] = None
+    gain_y: Optional[float] = None
+    motion_threshold: Optional[float] = None
 
 
 def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
@@ -181,7 +187,18 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                         dsp.tap_threshold_db = calibrator.profile.recommended_tap_threshold_db
                         dsp.cfar_factor = calibrator.profile.recommended_cfar_factor
 
-                # 3. Direct Hardware OS Continuous Air Mouse Movement
+                # 3. Determine Compound Living Presence State
+                is_living = bool(frame.intent_result.is_living_human)
+                is_geofenced = bool(frame.bounding_box.is_in_20cm_geofence)
+
+                if is_living and is_geofenced:
+                    presence_state = "IN_ZONE"
+                elif is_living and not is_geofenced:
+                    presence_state = "OUT_OF_ZONE"
+                else:
+                    presence_state = "NO_HAND"
+
+                # 4. Direct Hardware OS Continuous Air Mouse Movement
                 cursor_coords = None
                 if state["cursor_enabled"]:
                     cursor_coords = spatial_cursor.update_continuous_air_mouse(
@@ -189,10 +206,13 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                         d_phi_l=frame.d_phi_l,
                         d_phi_r=frame.d_phi_r,
                         total_motion=frame.motion_energy,
-                        timestamp=t_now
+                        timestamp=t_now,
+                        is_living_human=is_living,
+                        is_in_geofence=is_geofenced,
+                        presence_state=presence_state
                     )
 
-                # 4. Real-Time Deep Neural Network Gesture Classification (<0.5ms)
+                # 5. Real-Time Deep Neural Network Gesture Classification (<0.5ms)
                 dom = frame.dominant_target
                 target_range = dom.range_m if dom else 0.15
                 target_vel = dom.velocity_m_s if dom else (frame.d_phi_l * 0.1)
@@ -230,7 +250,7 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                     elif ml_gesture == "swipe_right":
                         spatial_cursor.execute_window_wave("right")
 
-                # 5. Asynchronous NVIDIA Cognitive AI Evaluation
+                # 6. Asynchronous NVIDIA Cognitive AI Evaluation
                 nvidia_agent.evaluate_async(
                     range_m=target_range,
                     velocity_m_s=target_vel,
@@ -247,10 +267,10 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                 if abs(ai_decision.cfar_bias_adjustment) > 0.1:
                     dsp.cfar_factor = max(1.5, min(4.0, config["dsp"]["cfar_threshold_factor"] + ai_decision.cfar_bias_adjustment))
 
-                # 6. Gesture Detector
+                # 7. Gesture Detector
                 gesture_detector.process_frame(frame)
 
-                # 7. Real-Time 3D Spatial Telemetry Stream
+                # 8. Real-Time Spatial Telemetry Stream
                 if ws_manager.dashboard_clients:
                     rdm_grid = frame.range_doppler_matrix.tolist()
                     range_profile_data = [round(float(x), 1) for x in frame.range_profile]
@@ -260,6 +280,14 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                     x_3d = round(float(target_range * np.sin(az_rad)), 3)
                     y_3d = round(float(frame.geometry_profile.mic_height_m + frame.phase_displacement_mm * 0.001), 3)
                     z_3d = round(float(target_range * np.cos(az_rad)), 3)
+
+                    # Compute normalized 2D Air Trackpad surface coordinates (X: -15cm..+15cm, Z: 10cm..20cm)
+                    x_clamped = max(-0.15, min(0.15, x_3d))
+                    z_clamped = max(0.08, min(0.24, target_range))
+                    trackpad_x = round(float((x_clamped + 0.15) / 0.30), 3)
+                    trackpad_y = round(float(1.0 - ((z_clamped - 0.10) / 0.10)), 3)
+                    trackpad_x = max(0.02, min(0.98, trackpad_x))
+                    trackpad_y = max(0.02, min(0.98, trackpad_y))
 
                     targets_3d = [
                         {
@@ -319,6 +347,31 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                             "rms_level": audio_status["rms_level"],
                             "rms_db": round(audio_status["rms_db"], 1),
                             "snr_db": round(audio_status["snr_db"], 1)
+                        },
+                        "hand_presence": {
+                            "presence_state": presence_state,
+                            "is_living_human": is_living,
+                            "is_in_geofence": is_geofenced,
+                            "distance_cm": round(float(bbox.origin_distance_cm), 1),
+                            "status_text": f"In Interaction Zone ({bbox.origin_distance_cm:.1f} cm)" if (is_living and is_geofenced) else (f"Out of Zone ({bbox.origin_distance_cm:.1f} cm)" if is_living else "No Hand Detected")
+                        },
+                        "trackpad_pos": {
+                            "x_norm": trackpad_x,
+                            "y_norm": trackpad_y,
+                            "is_present": is_living,
+                            "is_in_zone": is_geofenced
+                        },
+                        "cursor": {
+                            "pos": cursor_coords,
+                            "enabled": state["cursor_enabled"],
+                            "gain_x": spatial_cursor.gain_x,
+                            "gain_y": spatial_cursor.gain_y,
+                            "motion_threshold": spatial_cursor.motion_threshold
+                        },
+                        "tap": {
+                            "is_tap": frame.is_tap_candidate,
+                            "energy_db": frame.tap_energy_db,
+                            "threshold_db": dsp.tap_threshold_db
                         },
                         "range_profile": range_profile_data,
                         "range_axis": [round(float(r), 3) for r in frame.range_axis_m],
@@ -409,6 +462,7 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                 "detected_source": ai_dec.detected_source,
                 "reasoning": ai_dec.raw_ai_reasoning
             },
+            "sensitivity": spatial_cursor.get_sensitivity(),
             "radar_specs": sig_gen.get_radar_specs(),
             "calibration": calibrator.get_profile_dict(),
             "devices": AudioEngine.list_devices()
@@ -423,6 +477,34 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
         state["cursor_enabled"] = req.enabled
         spatial_cursor.set_enabled(req.enabled)
         return {"cursor_enabled": state["cursor_enabled"]}
+
+    @app.get("/api/cursor/sensitivity")
+    async def get_sensitivity():
+        """Retrieve real-time cursor sensitivity parameters."""
+        return {
+            "status": "ok",
+            "gain_x": spatial_cursor.gain_x,
+            "gain_y": spatial_cursor.gain_y,
+            "motion_threshold": spatial_cursor.motion_threshold
+        }
+
+    @app.post("/api/cursor/sensitivity")
+    async def update_sensitivity(req: SensitivityUpdateRequest):
+        """Update real-time cursor sensitivity and DPI parameters."""
+        if req.gain_x is not None:
+            spatial_cursor.set_gain_x(req.gain_x)
+        if req.gain_y is not None:
+            spatial_cursor.set_gain_y(req.gain_y)
+        elif req.gain_x is not None:
+            spatial_cursor.set_gain_y(req.gain_x * 0.8)
+        if req.motion_threshold is not None:
+            spatial_cursor.set_motion_threshold(req.motion_threshold)
+        return {
+            "status": "ok",
+            "gain_x": spatial_cursor.gain_x,
+            "gain_y": spatial_cursor.gain_y,
+            "motion_threshold": spatial_cursor.motion_threshold
+        }
 
     @app.post("/api/cursor/test-move")
     async def test_cursor_move():
@@ -442,7 +524,6 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
             return {"status": "ok", "message": "Windows hardware cursor moved successfully in a circle!"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
-
 
     @app.post("/api/calibrate")
     async def trigger_calibration():
@@ -482,6 +563,15 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                         curr = state["cursor_enabled"]
                         state["cursor_enabled"] = not curr
                         spatial_cursor.set_enabled(not curr)
+                    elif action == "set_sensitivity":
+                        gx = data.get("gain_x")
+                        gy = data.get("gain_y")
+                        if gx is not None:
+                            spatial_cursor.set_gain_x(float(gx))
+                        if gy is not None:
+                            spatial_cursor.set_gain_y(float(gy))
+                        elif gx is not None:
+                            spatial_cursor.set_gain_y(float(gx) * 0.8)
                 except Exception:
                     pass
         except WebSocketDisconnect:

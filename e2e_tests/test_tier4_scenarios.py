@@ -196,3 +196,89 @@ class TestRealWorldApplicationScenarios:
                 t_now += 0.04
                 # Cursor does not experience phantom jumps
                 assert frame_out.motion_energy < 0.05
+
+    def test_tier4_07_end_to_end_desktop_workflow(
+        self, dsp_pipeline, cursor_controller, gesture_detector, acoustic_factory
+    ):
+        """Complete Touchless Air Trackpad Desktop Workflow:
+        1. Navigate cursor across desktop to a target file icon (pure differential velocity dx, dy).
+        2. Double-click desktop file icon via TKEO physical desk double-tap.
+        3. Dynamically adjust sensitivity preset (Balanced 35x -> Fast 55x).
+        4. Move cursor at higher DPI to open window titlebar.
+        5. Rest hand in air inside interaction zone (assert 0.0 px drift & zero jitter).
+        """
+        cursor_controller.enabled = True
+        cursor_controller.set_position(960, 540)
+        cursor_controller.set_sensitivity(gain_x=35.0, gain_y=28.0, motion_threshold=0.001)
+
+        t_sim = 5000.0
+        dt = 0.033
+
+        # Step 1: Navigate cursor diagonally to desktop file icon (dx > 0, dy < 0)
+        trajectory = []
+        for step in range(30):
+            t_sim += dt
+            pos = cursor_controller.update_continuous_air_mouse(
+                inter_channel_phase=0.2,
+                d_phi_l=0.15,
+                d_phi_r=-0.10,
+                total_motion=0.08,
+                timestamp=t_sim,
+                is_living_human=True,
+                is_in_geofence=True,
+                presence_state="ACTIVE_TRACKING"
+            )
+            assert pos is not None
+            trajectory.append(pos)
+
+        assert trajectory[-1][0] > 960
+        assert trajectory[-1][1] < 540
+
+        # Step 2: Double-click desktop file icon via TKEO desk double-tap
+        t_click_start = time.perf_counter()
+        cursor_controller.execute_desk_click(is_double_click=True)
+        double_click_time_ms = (time.perf_counter() - t_click_start) * 1000.0
+        assert double_click_time_ms < 20.0, "Double-click must be non-blocking"
+
+        # Step 3: Adjust sensitivity preset to Fast (gain_x=55.0, gain_y=44.0)
+        cursor_controller.set_sensitivity(gain_x=55.0, gain_y=44.0)
+        assert cursor_controller.get_gain_x() == 55.0
+        assert cursor_controller.get_gain_y() == 44.0
+
+        # Step 4: Fast navigation to titlebar with high sensitivity
+        pos_before = cursor_controller.get_position()
+        t_sim += dt
+        pos_fast = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.0,
+            d_phi_l=0.20,
+            d_phi_r=0.20,
+            total_motion=0.08,
+            timestamp=t_sim,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert pos_fast is not None
+        assert pos_fast[1] < pos_before[1]
+
+        # Step 5: Hand resting in air (stationary in zone) -> 0.0 px drift
+        pos_rest_start = cursor_controller.get_position()
+        rest_positions = []
+        for i in range(50):
+            t_sim += dt
+            pos_rest = cursor_controller.update_continuous_air_mouse(
+                inter_channel_phase=0.3,
+                d_phi_l=0.0,
+                d_phi_r=0.0,
+                total_motion=0.0,
+                timestamp=t_sim,
+                is_living_human=True,
+                is_in_geofence=True,
+                presence_state="ACTIVE_TRACKING"
+            )
+            assert pos_rest == pos_rest_start, f"Resting drift detected: {pos_rest} != {pos_rest_start}"
+            rest_positions.append(pos_rest)
+
+        assert len(rest_positions) == 50
+        assert cursor_controller.get_position() == pos_rest_start
+

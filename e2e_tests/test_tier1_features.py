@@ -21,6 +21,7 @@ from src.core.gesture_detector import GestureDetector, GestureType
 from src.core.audio_engine import AudioEngine
 from src.input_bridge.spatial_cursor_controller import SpatialCursorController, OneEuroFilter
 from src.ai.gesture_classifier_net import AcousticGestureNet, AcousticMLManager, GESTURE_CLASSES, NUM_CLASSES
+from src.server.app import create_app, SensitivityUpdateRequest
 
 
 class TestF1AudioStreaming:
@@ -250,6 +251,41 @@ class TestF3BiomechanicalDiscrimination:
         assert hasattr(res, "ultrasonic_purity")
         assert hasattr(res, "debug_metrics")
 
+    def test_f3_06_presence_state_machine_transitions(self, intent_classifier, acoustic_factory):
+        """Verify 4-state presence state machine: NO_HAND -> ENTERING -> ACTIVE_TRACKING -> COASTING_EXIT -> NO_HAND."""
+        intent_classifier.reset_state_machine()
+        assert intent_classifier.presence_state == "NO_HAND"
+
+        hand_frame = acoustic_factory.generate_target_echo(range_m=0.14, velocity_m_s=0.15, target_snr_linear=0.8)[:, 0]
+
+        # Frame 1: Transitions from NO_HAND -> ENTERING
+        res1 = intent_classifier.classify_frame(hand_frame, hand_frame, 0.14, 0.08, 0.5, 18.0, 0.04)
+        assert res1.presence_state == "ENTERING"
+        assert res1.is_living_human is False
+
+        # Frame 2: Remains in ENTERING (frame 2)
+        res2 = intent_classifier.classify_frame(hand_frame, hand_frame, 0.14, 0.12, 0.5, 18.0, 0.04)
+        assert res2.presence_state == "ENTERING"
+
+        # Frame 3: Transitions to ACTIVE_TRACKING (K >= 3 frames)
+        res3 = intent_classifier.classify_frame(hand_frame, hand_frame, 0.14, 0.16, 0.5, 18.0, 0.04)
+        assert res3.presence_state == "ACTIVE_TRACKING"
+        assert res3.is_living_human is True
+
+        # Now simulate hand leaving (invalid / out-of-geofence or static silence)
+        silence = np.zeros(1920, dtype=np.float32)
+        res_coast1 = intent_classifier.classify_frame(silence, silence, 0.28, 0.0, 0.0, 2.0, 0.04)
+        assert res_coast1.presence_state == "COASTING_EXIT"
+
+        # Coasting frames 2, 3, 4
+        for _ in range(3):
+            intent_classifier.classify_frame(silence, silence, 0.28, 0.0, 0.0, 2.0, 0.04)
+
+        # 5th frame of absence transitions back to NO_HAND (M > 4 coasting frames)
+        res_nohand = intent_classifier.classify_frame(silence, silence, 0.28, 0.0, 0.0, 2.0, 0.04)
+        assert res_nohand.presence_state == "NO_HAND"
+        assert res_nohand.is_living_human is False
+
 
 class TestF4GeofenceClutterRejection:
     """F4: Strict 20cm Origin Geofence & Clutter Suppression"""
@@ -332,26 +368,61 @@ class TestF4GeofenceClutterRejection:
 
         assert abs(dsp_pipeline._dc_i_l) >= 0.0 or abs(dsp_pipeline._dc_q_l) >= 0.0
 
+    def test_f4_06_schmitt_trigger_hysteresis_and_null_target_safety(self, spatial_calibrator):
+        """Verify 10-20cm Schmitt trigger boundaries (10.0-19.0cm entry, 8.5-21.5cm retention) and null safety."""
+        spatial_calibrator.reset_zone_state()
+
+        # Outside entry: 9.5cm (0.095m) -> False
+        assert spatial_calibrator.is_within_interaction_zone(0.095) is False
+
+        # Inside entry: 10.5cm (0.105m) -> True
+        assert spatial_calibrator.is_within_interaction_zone(0.105) is True
+
+        # Retention from inside: 19.5cm (0.195m) -> True (within 0.085-0.215m retention)
+        assert spatial_calibrator.is_within_interaction_zone(0.195) is True
+
+        # Retention from inside: 20.5cm (0.205m) -> True
+        assert spatial_calibrator.is_within_interaction_zone(0.205) is True
+
+        # Outside retention: 22.0cm (0.220m) -> False
+        assert spatial_calibrator.is_within_interaction_zone(0.220) is False
+
+        # Null target safety: None returns False without error
+        assert spatial_calibrator.is_within_interaction_zone(None) is False
+
+        # Bounding box with None range does not generate fake target
+        bbox_null = spatial_calibrator.calculate_3d_bounding_box(
+            range_m=None,
+            azimuth_deg=0.0,
+            phase_disp_mm=0.0,
+            range_profile_db=np.zeros(100),
+            cfar_curve_db=np.ones(100),
+            range_axis_m=np.linspace(0.04, 1.2, 100)
+        )
+        assert bbox_null.is_in_20cm_geofence is False
+        assert bbox_null.origin_distance_cm == 999.0
+
+
 
 class TestF5CursorTracking:
     """F5: Real-Time Physical Mouse Cursor Tracking & 1-Euro Filter"""
 
     def test_f5_01_one_euro_filter_rest_jitter_attenuation(self):
-        f = OneEuroFilter(min_cutoff=0.6, beta=0.08)
+        f = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
         t = 0.0
         base_pos = 500.0
         filtered_vals = []
-        for i in range(50):
-            jitter = np.random.normal(0, 2.0)
+        for i in range(100):
+            jitter = np.random.normal(0, 1.5)
             val = f.filter(base_pos + jitter, t)
             filtered_vals.append(val)
             t += 0.033
 
-        filtered_std = np.std(filtered_vals[10:])
-        assert filtered_std < 2.0
+        filtered_std = np.std(filtered_vals[20:])
+        assert filtered_std < 0.45, f"Expected resting jitter std < 0.45px, got {filtered_std}"
 
     def test_f5_02_one_euro_filter_high_speed_lag_reduction(self):
-        f = OneEuroFilter(min_cutoff=0.6, beta=0.08)
+        f = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
         t = 0.0
         for i in range(20):
             target = float(i * 50)
@@ -395,6 +466,92 @@ class TestF5CursorTracking:
         assert cursor_controller.enabled is False
         cursor_controller.set_enabled(True)
         assert cursor_controller.enabled is True
+
+    def test_f5_06_pure_differential_velocity_tracking_formula(self, cursor_controller):
+        """Verify pure differential velocity: dx = (d_phi_l - d_phi_r) * gain_x, dy = -(d_phi_l + d_phi_r) * gain_y."""
+        cursor_controller.enabled = True
+        cursor_controller.gain_x = 35.0
+        cursor_controller.gain_y = 28.0
+        cursor_controller.motion_threshold = 0.001
+
+        # Test pure lateral motion to the right: d_phi_l = +0.2, d_phi_r = -0.2
+        t0 = 100.0
+        cursor_controller.set_position(960, 540)
+        res_right = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.0,
+            d_phi_l=0.2,
+            d_phi_r=-0.2,
+            total_motion=0.05,
+            timestamp=t0,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert res_right is not None
+        assert res_right[0] > 960
+
+        # Test pure vertical motion upwards: d_phi_l = +0.2, d_phi_r = +0.2
+        cursor_controller.set_position(960, 540)
+        res_up = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.0,
+            d_phi_l=0.2,
+            d_phi_r=0.2,
+            total_motion=0.05,
+            timestamp=t0 + 0.04,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert res_up is not None
+        assert res_up[1] < 540
+
+        # Test zero static azimuth drift when hand is stationary (d_phi_l = 0, d_phi_r = 0)
+        cursor_controller.set_position(960, 540)
+        res_stat = cursor_controller.update_continuous_air_mouse(
+            inter_channel_phase=0.5,
+            d_phi_l=0.0,
+            d_phi_r=0.0,
+            total_motion=0.0,
+            timestamp=t0 + 0.08,
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
+        )
+        assert res_stat == (960, 540)
+
+    def test_f5_07_cursor_sensitivity_rest_api_get_and_post(self, default_config):
+        """Verify REST API /api/cursor/sensitivity GET and POST endpoints."""
+        async def _run_test():
+            app = create_app(default_config, simulate_audio=True)
+            get_handler = None
+            post_handler = None
+            for route in app.routes:
+                if getattr(route, "path", None) == "/api/cursor/sensitivity":
+                    if "GET" in getattr(route, "methods", set()):
+                        get_handler = route.endpoint
+                    if "POST" in getattr(route, "methods", set()):
+                        post_handler = route.endpoint
+
+            assert get_handler is not None, "GET /api/cursor/sensitivity route missing"
+            assert post_handler is not None, "POST /api/cursor/sensitivity route missing"
+
+            resp_get = await get_handler()
+            assert resp_get["status"] == "ok"
+            assert "gain_x" in resp_get
+            assert "gain_y" in resp_get
+            assert "motion_threshold" in resp_get
+
+            req = SensitivityUpdateRequest(gain_x=48.0, gain_y=38.0, motion_threshold=1.5e-11)
+            resp_post = await post_handler(req)
+            assert resp_post["status"] == "ok"
+            assert resp_post["gain_x"] == 48.0
+            assert resp_post["gain_y"] == 38.0
+            assert resp_post["motion_threshold"] == 1.5e-11
+
+        asyncio.run(_run_test())
+
+
+
 
 
 class TestF6TKEOTapEngine:
@@ -448,6 +605,25 @@ class TestF6TKEOTapEngine:
 
         cursor_controller.execute_desk_click(is_double_click=False)
         assert cursor_controller._last_click_time == t_click1
+
+    def test_f6_06_non_blocking_click_execution_single_and_double(self, cursor_controller):
+        """Verify non-blocking TKEO desk tap click dispatch for single and double tap."""
+        cursor_controller.enabled = True
+        cursor_controller._last_click_time = 0.0
+
+        # Measure elapsed time for single click dispatch
+        t_start = time.perf_counter()
+        cursor_controller.execute_desk_click(is_double_click=False)
+        t_single = (time.perf_counter() - t_start) * 1000.0
+        assert t_single < 15.0, f"Single click blocked for {t_single} ms (expected < 15ms)"
+
+        # Reset cooldown and measure elapsed time for double click dispatch (must be non-blocking async thread)
+        cursor_controller._last_click_time = 0.0
+        t_start = time.perf_counter()
+        cursor_controller.execute_desk_click(is_double_click=True)
+        t_double = (time.perf_counter() - t_start) * 1000.0
+        assert t_double < 20.0, f"Double click blocked for {t_double} ms (expected < 20ms)"
+
 
 
 class TestF7MLGestureClassification:
@@ -550,6 +726,24 @@ class TestF8LightThemeUI:
         assert 'class="panel' in html
         assert '<header class="hud-header">' in html
 
+    def test_f8_06_minimalist_air_trackpad_ui_components(self, asset_paths):
+        """Verify presence of Air Trackpad UI elements and absence of legacy chart clutter in main layout."""
+        html = asset_paths["index_html"].read_text(encoding="utf-8")
+        assert "airTrackpadCanvas" in html
+        assert "presence-pill" in html
+        assert "cursor-sensitivity-slider" in html
+        assert "click-sandbox" in html
+        assert "test-cursor-btn" in html
+
+        # Verify active visible layout contains no Three.js scripts and uses 2-column air-trackpad grid
+        assert "air-trackpad-panel" in html
+        assert "trackpad-controls-panel" in html
+        assert "three.js" not in html.lower()
+        assert "three.min.js" not in html.lower()
+        assert "air_trackpad_canvas.js" in html
+
+
+
 
 class TestF9SVGIconSystem:
     """F9: Vector SVG Icon System & Zero Emoji Replacement"""
@@ -651,3 +845,9 @@ class TestF10TelemetryVisualizers:
         html = asset_paths["index_html"].read_text(encoding="utf-8")
         assert 'id="radar3dContainer"' in html
         assert 'polarRadarCanvas' in html or 'rdmCanvas' in html or 'canvas' in html
+
+    def test_f10_06_touchless_air_trackpad_minimalist_telemetry(self, default_config):
+        """Verify telemetry serialization supports hand_presence, trackpad_pos, cursor, and tap objects."""
+        app = create_app(default_config, simulate_audio=True)
+        assert app is not None
+

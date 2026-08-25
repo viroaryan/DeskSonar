@@ -136,23 +136,27 @@ def run_all():
 
     # 7. Spatial Cursor & Continuous Air Mouse
     def test_cursor():
-        f = OneEuroFilter(min_cutoff=1.0, beta=0.05)
+        f = OneEuroFilter(min_cutoff=0.35, beta=0.018, d_cutoff=1.0)
         v1 = f.filter(100.0, 1000.0)
         assert v1 == 100.0
         v2 = f.filter(102.0, 1000.04)
         assert 100.0 < v2 < 102.0
 
-        ctrl = SpatialCursorController(enabled=True)
+        ctrl = SpatialCursorController(enabled=True, gain_x=35.0, gain_y=28.0)
         pos = ctrl.update_continuous_air_mouse(
-            inter_channel_phase=0.5,
+            inter_channel_phase=0.0,
             d_phi_l=0.2,
-            d_phi_r=0.1,
-            total_motion=0.001,
-            timestamp=time.time()
+            d_phi_r=-0.2,
+            total_motion=0.05,
+            timestamp=time.time(),
+            is_living_human=True,
+            is_in_geofence=True,
+            presence_state="ACTIVE_TRACKING"
         )
         if pos:
             assert len(pos) == 2
-    test("SpatialCursorController: Continuous Air Mouse Delta Accumulation", test_cursor)
+    test("SpatialCursorController: Pure Differential Velocity & 1-Euro Filter", test_cursor)
+
 
     # 8. Gesture Detector (Tap, Double Tap, Wave Left/Right)
     def test_gestures():

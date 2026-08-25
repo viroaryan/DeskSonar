@@ -56,3 +56,101 @@ def test_tap_detection(dsp_setup):
 
     assert frame.tap_energy_db > 10.0
     assert frame.is_tap_candidate is True
+
+
+def test_asli_speech_leakage_index():
+    from src.core.intent_classifier import AcousticIntentClassifier, SignalSourceType
+    classifier = AcousticIntentClassifier()
+    t = np.arange(1920) / 48000.0
+
+    # Audible speech (300-3000 Hz) vs ultrasonic carrier (20kHz)
+    audible = 0.8 * np.sin(2.0 * np.pi * 600.0 * t) + 0.6 * np.sin(2.0 * np.pi * 1400.0 * t)
+    ultra_leak = 0.005 * np.sin(2.0 * np.pi * 20000.0 * t)
+    speech_signal = (audible + ultra_leak).astype(np.float32)
+
+    asli_db = classifier.compute_asli(speech_signal)
+    assert asli_db > 15.0
+
+    res = classifier.classify_frame(
+        raw_audio=speech_signal,
+        filtered_ultrasonic=ultra_leak.astype(np.float32),
+        measured_range_m=0.14,
+        measured_velocity_m_s=0.08,
+        instantaneous_phase_rad=0.0,
+        snr_db=10.0,
+        dt=0.04
+    )
+    assert res.is_living_human is False
+    assert res.source_type == SignalSourceType.ACOUSTIC_SPEECH_LEAKAGE
+
+
+def test_schmitt_trigger_10_20cm_geofence():
+    from src.core.spatial_calibrator import SpatialPlaneCalibrator
+    calibrator = SpatialPlaneCalibrator()
+    calibrator.reset_zone_state()
+
+    # Entry zone (0.100m to 0.190m)
+    assert calibrator.is_within_interaction_zone(0.095) is False
+    assert calibrator.is_within_interaction_zone(0.105) is True
+
+    # Retention zone (0.085m to 0.215m) when active
+    assert calibrator.is_within_interaction_zone(0.195) is True
+    assert calibrator.is_within_interaction_zone(0.205) is True
+    assert calibrator.is_within_interaction_zone(0.220) is False
+
+
+def test_absent_target_null_safety():
+    from src.core.spatial_calibrator import SpatialPlaneCalibrator
+    from src.core.intent_classifier import AcousticIntentClassifier
+    calibrator = SpatialPlaneCalibrator()
+    classifier = AcousticIntentClassifier()
+
+    assert calibrator.is_within_interaction_zone(None) is False
+    bbox = calibrator.calculate_3d_bounding_box(
+        range_m=None,
+        azimuth_deg=0.0,
+        phase_disp_mm=0.0,
+        range_profile_db=np.zeros(64),
+        cfar_curve_db=np.ones(64),
+        range_axis_m=np.linspace(0.04, 1.2, 64)
+    )
+    assert bbox.is_in_20cm_geofence is False
+    assert bbox.origin_distance_cm == 999.0
+
+    res = classifier.classify_frame(
+        raw_audio=np.zeros(100),
+        filtered_ultrasonic=np.zeros(100),
+        measured_range_m=None,
+        measured_velocity_m_s=None,
+        instantaneous_phase_rad=0.0,
+        snr_db=0.0,
+        dt=0.04
+    )
+    assert res.is_within_geofence is False
+    assert res.is_living_human is False
+
+
+def test_4_state_presence_machine():
+    from src.core.intent_classifier import AcousticIntentClassifier
+    classifier = AcousticIntentClassifier()
+    classifier.reset_state_machine()
+    assert classifier.presence_state == "NO_HAND"
+
+    # Feed valid diffuse frames
+    t = np.arange(1920) / 48000.0
+    valid_sig = np.zeros(1920, dtype=np.float32)
+    for df in np.linspace(-100, 100, 10):
+        valid_sig += np.sin(2.0 * np.pi * (20000.0 + df) * t).astype(np.float32)
+    valid_sig /= 10.0
+
+    r1 = classifier.classify_frame(valid_sig, valid_sig, 0.14, 0.08, 0.5, 18.0, 0.04)
+    assert r1.presence_state == "ENTERING"
+    assert r1.is_living_human is False
+
+    r2 = classifier.classify_frame(valid_sig, valid_sig, 0.14, 0.12, 0.5, 18.0, 0.04)
+    assert r2.presence_state == "ENTERING"
+
+    r3 = classifier.classify_frame(valid_sig, valid_sig, 0.14, 0.16, 0.5, 18.0, 0.04)
+    assert r3.presence_state == "ACTIVE_TRACKING"
+    assert r3.is_living_human is True
+
