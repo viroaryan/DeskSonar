@@ -7,37 +7,53 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
   <!-- Three.js 3D Engine & OrbitControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
-<body class="dark-theme">
+<body class="light-theme">
 
-  <!-- Microphone Hardware Permission Modal (Prompt on click) -->
+  <!-- Microphone Hardware Permission Modal (Prompt on load/click) -->
   <div id="mic-permission-modal" class="permission-modal">
     <div class="permission-card">
-      <div class="modal-icon">🎙️</div>
+      <div class="modal-icon">
+        <svg class="svg-icon svg-icon-xl" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" x2="12" y1="19" y2="22"/>
+        </svg>
+      </div>
       <h2>ENABLE LAPTOP MICROPHONE ACCESS</h2>
       <p>DeskSonar uses your laptop's built-in digital MEMS microphone to capture ultrasonic hand echoes (18.5 - 20.5 kHz) for real-time 3D spatial radar and touchless air mouse control.</p>
       <div class="modal-btn-group">
         <button id="grant-mic-btn" class="hud-btn primary large-btn" onclick="requestBrowserMicrophonePermission()">
-          🎙️ GRANT MICROPHONE ACCESS NOW
-        </button>
-        <button class="hud-btn" onclick="dismissMicModal()">
-          Skip to Demo Mode
+          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+          Grant Microphone Access Now
         </button>
       </div>
       <div class="modal-troubleshoot">
-        🔒 <span>If prompted by Chrome/Edge, click <b>"Allow"</b> to activate hardware radar.</span>
+        <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>If prompted by Chrome/Edge, click <b>"Allow"</b> to activate hardware radar.</span>
       </div>
     </div>
   </div>
 
-  <!-- Futuristic HUD Header -->
+  <!-- Minimalist HUD Header -->
   <header class="hud-header">
     <div class="logo-area">
-      <div class="radar-icon-pulse"></div>
+      <div class="radar-icon-pulse">
+        <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#ffffff" stroke-width="2.5">
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
       <div class="title-wrap">
         <h1>DESK<span class="highlight">SONAR</span></h1>
         <span class="version-tag">ACOUSTIC RADAR • DEEP NEURAL NET • v4.0</span>
@@ -45,23 +61,76 @@
     </div>
 
     <div class="system-status-bar">
-      <!-- Direct Hardware Mic Permission Trigger Badge -->
-      <div class="status-item" id="mic-perm-status-item" onclick="requestBrowserMicrophonePermission()" style="cursor: pointer;">
-        <span class="label">HARDWARE MIC PERMISSION</span>
-        <span class="value yellow" id="mic-perm-badge">⚠️ CLICK TO ALLOW MIC</span>
+      <!-- Direct Hardware Mic Permission Trigger Badge & Level Meter -->
+      <div class="status-item" id="mic-perm-status-item" onclick="requestBrowserMicrophonePermission()" style="cursor: pointer;" title="Click to grant/verify microphone permission">
+        <span class="label">
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          </svg>
+          HARDWARE MIC PERMISSION
+        </span>
+        <span class="value yellow" id="mic-perm-badge">
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+            <line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>
+          </svg>
+          ALLOW MIC
+        </span>
+        <div class="audio-level-container">
+          <div class="audio-level-track">
+            <div class="audio-level-bar" id="mic-audio-level-bar"></div>
+          </div>
+          <span id="mic-audio-level-val" style="font-size:0.6rem; color:var(--text-muted);">-inf dB</span>
+        </div>
       </div>
+
       <div class="status-item">
-        <span class="label">ML NEURAL NET</span>
-        <span class="value green" id="ml-pred-badge">✨ IDLE</span>
+        <span class="label">
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2">
+            <rect width="16" height="16" x="4" y="4" rx="2"/><path d="M9 9h6v6H9z"/>
+          </svg>
+          ML NEURAL NET
+        </span>
+        <span class="value green" id="ml-pred-badge">
+          <span class="dot"></span> IDLE
+        </span>
       </div>
+
       <div class="status-item">
-        <span class="label">NVIDIA COGNITIVE AI</span>
-        <span class="value green" id="ai-intent-badge">🟢 LIVING HUMAN INTENT</span>
+        <span class="label">
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          COGNITIVE AI
+        </span>
+        <span class="value green" id="ai-intent-badge">
+          <span class="dot"></span> LIVING HUMAN INTENT
+        </span>
       </div>
+
       <div class="status-item">
-        <span class="label">20CM GEOFENCE</span>
-        <span class="value green" id="geofence-badge">🟢 20CM GEOFENCE LOCK</span>
+        <span class="label">
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>
+          </svg>
+          20CM GEOFENCE
+        </span>
+        <span class="value green" id="geofence-badge">
+          <span class="dot"></span> 20CM GEOFENCE LOCK
+        </span>
       </div>
+
+      <div class="status-item">
+        <span class="label">FRAME RATE</span>
+        <span class="value" id="fps-counter">30.0 FPS</span>
+      </div>
+
+      <div class="status-item">
+        <span class="label">NOISE FLOOR</span>
+        <span class="value" id="noise-floor-val">-55.0 dB</span>
+      </div>
+
       <div class="status-item">
         <span class="label">RADAR STREAM</span>
         <span class="value" id="conn-status"><span class="dot blink"></span> CONNECTING...</span>
@@ -75,8 +144,16 @@
     <!-- LEFT PANEL: 3D Real-Time Spatial Holographic Studio -->
     <section class="panel radar-panel">
       <div class="panel-header">
-        <span class="header-icon">🌐</span>
-        <h2>3D REAL-TIME SPATIAL HOLOGRAPHIC STUDIO</h2>
+        <h2>
+          <span class="header-icon">
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21 16-9 5-9-5V8l9-5 9 5v8z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" x2="12" y1="22.08" y2="12"/>
+            </svg>
+          </span>
+          3D REAL-TIME SPATIAL HOLOGRAPHIC STUDIO
+        </h2>
         <div class="camera-btn-group">
           <button class="pill-btn" onclick="set3DCamera('perspective')">Perspective</button>
           <button class="pill-btn" onclick="set3DCamera('top')">Top View</button>
@@ -101,7 +178,7 @@
         </div>
         <div class="metric-box">
           <span class="m-label">WIN32 CURSOR PIXEL</span>
-          <span class="m-val cyan" id="cursor-coords-val">[960, 540] px</span>
+          <span class="m-val blue" id="cursor-coords-val">[960, 540] px</span>
         </div>
       </div>
     </section>
@@ -109,25 +186,48 @@
     <!-- CENTER TOP PANEL: 120° Dual-Mic Azimuth Sector Radar -->
     <section class="panel sector-panel">
       <div class="panel-header">
-        <span class="header-icon">📡</span>
-        <h2>120° DUAL-MIC AZIMUTH SECTOR RADAR</h2>
-        <span class="pill cyan-pill">PDoA BEAMFORMER [-60°, +60°]</span>
+        <h2>
+          <span class="header-icon">
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="2"/>
+              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
+            </svg>
+          </span>
+          120° DUAL-MIC AZIMUTH SECTOR RADAR
+        </h2>
+        <span class="pill blue-pill">PDoA BEAMFORMER [-60°, +60°]</span>
       </div>
       <div class="canvas-wrapper">
         <canvas id="polarRadarCanvas" width="560" height="260"></canvas>
       </div>
       <div class="sector-legend">
-        <span>👈 LEFT (-60°)</span>
+        <span>
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
+          </svg>
+          LEFT (-60°)
+        </span>
         <span class="highlight">CENTER (0°)</span>
-        <span>RIGHT (+60°) 👉</span>
+        <span>
+          RIGHT (+60°)
+          <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+          </svg>
+        </span>
       </div>
     </section>
 
     <!-- CENTER BOTTOM PANEL: 1D Range Profile & CA-CFAR Curve + RDM -->
     <section class="panel range-profile-panel">
       <div class="panel-header">
-        <span class="header-icon">📈</span>
-        <h2>1D RANGE PROFILE & CA-CFAR THRESHOLD</h2>
+        <h2>
+          <span class="header-icon">
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </span>
+          1D RANGE PROFILE & CA-CFAR THRESHOLD
+        </h2>
         <span class="pill">DIRECT-PATH ANCHOR LOCK</span>
       </div>
       <div class="canvas-wrapper" style="display: flex; gap: 6px;">
@@ -136,64 +236,104 @@
       </div>
     </section>
 
-    <!-- RIGHT PANEL: ML Neural Network, NVIDIA AI Telemetry, Gestures & Desktop Controls -->
+    <!-- RIGHT PANEL: ML Neural Network, Cognitive AI Telemetry, Gestures & Desktop Controls -->
     <aside class="panel controls-panel">
       
       <!-- ML Neural Network Real-Time Gesture Probability Meter -->
       <div class="ai-telemetry-container">
         <div class="gesture-title-row">
-          <h3>DEEP NEURAL NET GESTURE PREDICTOR</h3>
+          <h3>Deep Neural Net Gesture Predictor</h3>
           <span class="ai-badge-pill" id="ml-conf-val">95% CONFIDENCE</span>
         </div>
         <div class="ml-prob-grid">
           <div class="ml-prob-row">
-            <span class="p-name">👈 Swipe Left</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
+              </svg>
+              Swipe Left
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-swipe_left" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-swipe_left">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">👉 Swipe Right</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+              </svg>
+              Swipe Right
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-swipe_right" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-swipe_right">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">⏩ Push (Zoom)</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m13 17 5-5-5-5"/><path d="m6 17 5-5-5-5"/>
+              </svg>
+              Push (Zoom)
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-push" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-push">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">⏪ Pull (Back)</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>
+              </svg>
+              Pull (Back)
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-pull" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-pull">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">⬆️ Scroll Up</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m18 15-6-6-6 6"/>
+              </svg>
+              Scroll Up
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-scroll_up" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-scroll_up">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">⬇️ Scroll Down</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+              Scroll Down
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-scroll_down" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-scroll_down">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">💥 Desk Tap</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              Desk Tap
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-tap" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-tap">0%</span>
           </div>
           <div class="ml-prob-row">
-            <span class="p-name">💥💥 Double Tap</span>
+            <span class="p-name">
+              <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/><polygon points="13 2 9 14 14 14 12 22 20 10 15 10 17 2"/>
+              </svg>
+              Double Tap
+            </span>
             <div class="p-track"><div class="p-bar" id="prob-bar-double_tap" style="width: 0%;"></div></div>
             <span class="p-val" id="prob-val-double_tap">0%</span>
           </div>
         </div>
       </div>
 
-      <!-- NVIDIA Cognitive AI Telemetry Card -->
-      <div class="ai-telemetry-container" style="margin-top: 10px;">
+      <!-- Cognitive AI Telemetry Card -->
+      <div class="ai-telemetry-container">
         <div class="gesture-title-row">
-          <h3>NVIDIA COGNITIVE AI REASONING</h3>
-          <span class="ai-badge-pill" id="ai-conf-val">88% AI CONFIDENCE</span>
+          <h3>Cognitive AI Reasoning</h3>
+          <span class="ai-badge-pill" id="ai-conf-val">88% CONFIDENCE</span>
         </div>
         <div class="ai-card">
           <div class="ai-source-row">
@@ -209,11 +349,15 @@
       <!-- Gesture Alert Box -->
       <div class="gesture-alert-container">
         <div class="gesture-title-row">
-          <h3>ACTIVE GESTURE & OS COMMAND</h3>
+          <h3>Active Gesture & OS Command</h3>
           <span class="gesture-count" id="total-gestures-badge">0 TRIGGERED</span>
         </div>
         <div class="gesture-display-card" id="gesture-card">
-          <div class="gesture-icon" id="gesture-icon">✨</div>
+          <div class="gesture-icon" id="gesture-icon">
+            <svg class="svg-icon svg-icon-lg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+            </svg>
+          </div>
           <div class="gesture-info">
             <div class="gesture-name" id="gesture-name">READY FOR INPUT</div>
             <div class="gesture-meta" id="gesture-meta">Move hand in front of laptop to move mouse cursor, tap table to click</div>
@@ -235,40 +379,52 @@
 
       <!-- OS Cursor & Window Control Toggles -->
       <div class="control-section">
-        <h3>DESKTOP & CURSOR CONTROLLER</h3>
+        <h3>Desktop & Cursor Controller</h3>
         <div class="action-buttons">
           <button class="hud-btn primary" id="cursor-toggle-btn" onclick="toggleCursorControl()">
-            🖱️ Win32 OS Cursor: ACTIVE
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="7"/>
+              <line x1="12" y1="6" x2="12" y2="10"/>
+            </svg>
+            Win32 OS Cursor: ACTIVE
           </button>
           <button class="hud-btn" id="calibrate-btn" onclick="triggerCalibration()">
-            🎙️ Auto-Calibrate 20cm Zone
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/>
+              <line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/>
+              <line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/>
+              <line x1="1" x2="7" y1="14" y2="14"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="17" x2="23" y1="16" y2="16"/>
+            </svg>
+            Auto-Calibrate 20cm Zone
           </button>
           <button class="hud-btn" id="train-ml-btn" onclick="triggerMLRetrain()">
-            🧠 Retrain Acoustic ML Model
+            <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="16" height="16" x="4" y="4" rx="2"/>
+              <rect width="6" height="6" x="9" y="9" rx="1"/>
+              <path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>
+            </svg>
+            Retrain Acoustic ML Model
           </button>
-        </div>
-      </div>
-
-      <!-- Quick Interactive Simulation / Test Triggers -->
-      <div class="control-section">
-        <h3>TEST SCENARIO TRIGGER (SIMULATOR)</h3>
-        <div class="btn-grid">
-          <button class="hud-btn" onclick="setScenario('desk_tap')">💥 Desk Tap</button>
-          <button class="hud-btn" onclick="setScenario('double_tap')">💥💥 Double Tap</button>
-          <button class="hud-btn" onclick="setScenario('approach_push')">⏩ Push (Zoom)</button>
-          <button class="hud-btn" onclick="setScenario('retreat_pull')">⏪ Pull (Back)</button>
-          <button class="hud-btn" onclick="setScenario('hover_scroll')">🔄 Air Scroll</button>
-          <button class="hud-btn" onclick="setScenario('idle')">⏹️ Idle</button>
         </div>
       </div>
 
       <!-- Phone Companion Node Info -->
       <div class="phone-node-card">
-        <div class="phone-icon">📱</div>
+        <div class="phone-icon">
+          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+            <line x1="12" x2="12.01" y1="18" y2="18"/>
+          </svg>
+        </div>
         <div class="phone-text">
-          <h4>SMARTPHONE DUAL-NODE COMPANION</h4>
+          <h4>Smartphone Dual-Node Companion</h4>
           <p>Open <code id="phone-url">http://&lt;IP&gt;:8765/phone</code> on phone for dual-node transceiver.</p>
-          <a href="/phone" target="_blank" class="phone-link">Open Mobile UI &rarr;</a>
+          <a href="/phone" target="_blank" class="phone-link">
+            Open Mobile UI
+            <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+            </svg>
+          </a>
         </div>
       </div>
 

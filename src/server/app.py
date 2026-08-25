@@ -1,7 +1,7 @@
 """
 DeskSonar AI Spatial Radar & Cursor Control Server
 Integrates:
-- Real-Time Dual-Microphone Acoustic Sonar DSP (48 kHz Full-Duplex)
+- Real-Time Dual-Microphone Acoustic Sonar DSP (48 kHz Full-Duplex Authentic Hardware)
 - PyTorch / Vectorized Deep Neural Network Real-Time Gesture Classifier (<0.5ms)
 - Continuous Air Mouse Carrier Phase-Shift Delta Accumulator (LLAP / SoundWave)
 - Strict 20cm Spherical Origin Geofence & Hand Bounding Box Dimensions (L x W x H in cm)
@@ -30,13 +30,12 @@ from ..core.signal_generator import SignalGenerator, RadarSignalMode
 from ..core.dsp_pipeline import DSPPipeline, RadarFrame
 from ..core.gesture_detector import GestureDetector, GestureEvent, GestureType
 from ..core.calibrator import NoiseCalibrator
-from ..core.audio_engine import AudioEngine
+from ..core.audio_engine import AudioEngine, AudioHardwareError
 from ..ai.gesture_classifier_net import AcousticMLManager
 from ..ai.nvidia_agent import NvidiaCognitiveAgent, AIFilterDecision
 from ..input_bridge.spatial_cursor_controller import SpatialCursorController
 from ..input_bridge.virtual_controller import VirtualController
 from ..input_bridge.gesture_mapper import GestureMapper
-from ..simulation.acoustic_simulator import AcousticSimulator, SimulatedScenario
 
 
 class ConfigUpdateRequest(BaseModel):
@@ -44,10 +43,6 @@ class ConfigUpdateRequest(BaseModel):
     cfar_factor: Optional[float] = None
     speaker_volume: Optional[float] = None
     cursor_control_enabled: Optional[bool] = None
-
-
-class ScenarioRequest(BaseModel):
-    scenario: str
 
 
 class CursorToggleRequest(BaseModel):
@@ -84,7 +79,6 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
     )
 
     calibrator = NoiseCalibrator(target_samples=40)
-    simulator = AcousticSimulator(signal_gen=sig_gen)
     ws_manager = ConnectionManager()
 
     # PyTorch / Vectorized Deep Neural Network Gesture Engine
@@ -111,13 +105,11 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
         chunk_size=config["system"]["chunk_size"],
         speaker_volume=config["system"].get("speaker_volume", 0.85),
         preamp_gain=1.0,
-        simulate=simulate_audio
+        simulate=False
     )
 
     state = {
         "is_running": False,
-        "is_simulated": simulate_audio,
-        "active_scenario": "idle",
         "frames_processed": 0,
         "total_gestures_detected": 0,
         "start_time": time.time(),
@@ -161,24 +153,21 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
     gesture_detector.register_callback(on_gesture_detected)
 
     async def radar_dsp_loop():
-        audio_engine.start()
+        try:
+            audio_engine.start()
+            print("[Server] AudioEngine hardware stream started.")
+        except Exception as e:
+            print(f"[Server] Hardware audio initialization notice: {e}")
+
         state["is_running"] = True
 
         while state["is_running"]:
-            t_now = time.time()
-            raw_audio = None
+            frame_data = audio_engine.get_next_frame(timeout=0.04)
+            if frame_data is None:
+                await asyncio.sleep(0.005)
+                continue
 
-            if state["is_simulated"]:
-                raw_mono = simulator.generate_synthetic_echo_frame(t_now)
-                raw_audio = np.column_stack([raw_mono, raw_mono])
-                await asyncio.sleep(config["radar"]["fmcw_sweep_time_s"])
-            else:
-                frame_data = audio_engine.get_next_frame(timeout=0.04)
-                if frame_data is not None:
-                    raw_audio, t_now = frame_data
-                else:
-                    await asyncio.sleep(0.003)
-                    continue
+            raw_audio, t_now = frame_data
 
             if raw_audio is not None:
                 # 1. Core Acoustic Radar DSP Chain
@@ -315,9 +304,22 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                         "probabilities": ml_probs
                     }
 
+                    audio_status = audio_engine.get_status()
+
                     telemetry_payload = {
                         "type": "radar_frame",
                         "timestamp": frame.timestamp,
+                        "hardware": {
+                            "is_live": audio_status["is_hardware_live"],
+                            "device": audio_status["input_device"],
+                            "input_device": audio_status["input_device"],
+                            "output_device": audio_status["output_device"],
+                            "host_api": audio_status["host_api"],
+                            "sample_rate": audio_status["sample_rate"],
+                            "rms_level": audio_status["rms_level"],
+                            "rms_db": round(audio_status["rms_db"], 1),
+                            "snr_db": round(audio_status["snr_db"], 1)
+                        },
                         "range_profile": range_profile_data,
                         "range_axis": [round(float(r), 3) for r in frame.range_axis_m],
                         "cfar_threshold_curve": cfar_curve_data,
@@ -348,9 +350,8 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                         "stats": {
                             "fps": round(state["frames_processed"] / max(1.0, time.time() - state["start_time"]), 1),
                             "total_gestures": state["total_gestures_detected"],
-                            "is_simulated": state["is_simulated"],
-                            "cursor_enabled": state["cursor_enabled"],
-                            "active_scenario": state["active_scenario"]
+                            "is_hardware_live": audio_status["is_hardware_live"],
+                            "cursor_enabled": state["cursor_enabled"]
                         }
                     }
                     await ws_manager.broadcast_telemetry(telemetry_payload)
@@ -379,10 +380,24 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
     @app.get("/api/status")
     async def get_status():
         ai_dec = nvidia_agent.get_latest_decision()
+        audio_status = audio_engine.get_status()
         return {
-            "status": "online",
-            "is_simulated": state["is_simulated"],
-            "active_scenario": state["active_scenario"],
+            "status": "online" if state["is_running"] else "idle",
+            "is_hardware_live": audio_status["is_hardware_live"],
+            "hardware": {
+                "is_live": audio_status["is_hardware_live"],
+                "input_device": audio_status["input_device"],
+                "input_device_id": audio_status["input_device_id"],
+                "output_device": audio_status["output_device"],
+                "output_device_id": audio_status["output_device_id"],
+                "host_api": audio_status["host_api"],
+                "sample_rate": audio_status["sample_rate"],
+                "chunk_size": audio_status["chunk_size"],
+                "rms_level": audio_status["rms_level"],
+                "rms_db": round(audio_status["rms_db"], 1),
+                "snr_db": round(audio_status["snr_db"], 1),
+                "frames_captured": audio_status["frames_captured"]
+            },
             "cursor_enabled": state["cursor_enabled"],
             "frames_processed": state["frames_processed"],
             "total_gestures": state["total_gestures_detected"],
@@ -399,6 +414,10 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
             "devices": AudioEngine.list_devices()
         }
 
+    @app.get("/api/audio/status")
+    async def get_audio_status():
+        return audio_engine.get_status()
+
     @app.post("/api/cursor/toggle")
     async def toggle_cursor(req: CursorToggleRequest):
         state["cursor_enabled"] = req.enabled
@@ -414,17 +433,6 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
     async def trigger_ml_training():
         acc = ml_manager.train_on_synthetic_dataset(epochs=25, batch_size=32)
         return {"message": f"ML Neural Network retrained successfully! Validation Accuracy: {acc:.1f}%"}
-
-    @app.post("/api/scenario")
-    async def set_simulation_scenario(req: ScenarioRequest):
-        try:
-            scenario_enum = SimulatedScenario(req.scenario)
-            simulator.set_scenario(scenario_enum)
-            state["active_scenario"] = req.scenario
-            state["is_simulated"] = True
-            return {"message": f"Simulation scenario changed to {req.scenario}"}
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid scenario: {req.scenario}")
 
     @app.post("/api/config")
     async def update_config(req: ConfigUpdateRequest):
@@ -454,12 +462,6 @@ def create_app(config: Dict[str, Any], simulate_audio: bool = False) -> FastAPI:
                         curr = state["cursor_enabled"]
                         state["cursor_enabled"] = not curr
                         spatial_cursor.set_enabled(not curr)
-                    elif action == "set_scenario":
-                        scen = data.get("scenario", "idle")
-                        simulator.set_scenario(SimulatedScenario(scen))
-                        state["active_scenario"] = scen
-                    elif action == "toggle_mode":
-                        state["is_simulated"] = not state["is_simulated"]
                 except Exception:
                     pass
         except WebSocketDisconnect:

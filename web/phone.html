@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>DeskSonar — Mobile Ultrasonic Node</title>
   <link rel="stylesheet" href="/static/css/style.css">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
   <style>
     body {
       padding: 16px;
@@ -14,85 +16,114 @@
       align-items: center;
       justify-content: flex-start;
       min-height: 100vh;
+      background-color: var(--bg-base);
     }
     .mobile-card {
       width: 100%;
       max-width: 420px;
-      background: rgba(12, 18, 28, 0.9);
-      border: 1px solid rgba(0, 240, 255, 0.3);
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
       border-radius: 16px;
       padding: 24px 20px;
-      box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+      box-shadow: var(--shadow-lg);
       margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
     .touch-pad-area {
       width: 100%;
       height: 220px;
-      background: radial-gradient(circle, rgba(0, 240, 255, 0.15) 0%, rgba(5, 10, 20, 0.8) 80%);
-      border: 2px dashed rgba(0, 240, 255, 0.4);
+      background: radial-gradient(circle, var(--accent-blue-bg) 0%, var(--bg-subtle) 80%);
+      border: 2px dashed var(--accent-blue-border);
       border-radius: 12px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      margin: 20px 0;
       cursor: pointer;
       user-select: none;
-      transition: all 0.15s ease;
+      transition: all var(--transition-fast);
     }
     .touch-pad-area:active, .touch-pad-area.active-tap {
-      background: rgba(0, 240, 255, 0.3);
-      border-color: #00f0ff;
+      background: var(--status-success-bg);
+      border-color: var(--status-success);
       transform: scale(0.98);
-      box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+      box-shadow: 0 0 16px rgba(5, 150, 105, 0.25);
     }
     .pad-icon {
-      font-size: 3rem;
-      margin-bottom: 8px;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--accent-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+    .touch-pad-area.active-tap .pad-icon {
+      color: var(--status-success);
     }
     .pad-hint {
-      color: #00f0ff;
+      color: var(--text-primary);
+      font-family: var(--font-display);
       font-weight: 700;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
+      letter-spacing: -0.01em;
       text-transform: uppercase;
-      letter-spacing: 1px;
     }
   </style>
 </head>
-<body class="dark-theme">
+<body class="light-theme">
   <div class="mobile-card">
-    <div class="logo-area" style="justify-content: center; margin-bottom: 16px;">
+    <div class="logo-area" style="justify-content: center;">
+      <div class="radar-icon-pulse">
+        <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#ffffff" stroke-width="2.5">
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
       <div class="title-wrap" style="text-align: center;">
-        <h1 style="font-size: 1.6rem;">PHONE<span class="highlight">NODE</span></h1>
+        <h1 style="font-size: 1.3rem;">PHONE<span class="highlight">NODE</span></h1>
         <span class="version-tag">DESKSONAR DUAL-NODE COMPANION</span>
       </div>
     </div>
 
-    <div class="status-item" style="margin-bottom: 16px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px;">
+    <div class="status-item" style="align-items: center; padding: 8px 12px;">
       <span class="label">WEBSOCKET STATUS</span>
       <span class="value" id="phone-ws-status"><span class="dot blink"></span> CONNECTING</span>
     </div>
 
     <!-- Acoustic Sonar Transmitter Toggle -->
     <div class="control-section">
-      <h3>ULTRASONIC TRANSMITTER (20.0 kHz)</h3>
-      <button class="hud-btn primary" id="toggle-ultrasonic-btn" onclick="toggleUltrasonicEmission()" style="width: 100%; height: 48px; font-size: 1rem;">
-        🔊 Start Inaudible Sonar Probe
+      <h3>Ultrasonic Transmitter (20.0 kHz)</h3>
+      <button class="hud-btn primary" id="toggle-ultrasonic-btn" onclick="toggleUltrasonicEmission()" style="width: 100%; height: 44px;">
+        <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+        <span id="toggle-btn-text">Start Inaudible Sonar Probe</span>
       </button>
-      <p style="font-size: 0.75rem; color: #8a9ba8; margin-top: 6px;">
-        Emits an inaudible 20 kHz acoustic pilot tone from your phone speaker. PC detects phone distance and Doppler movement!
+      <p style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">
+        Emits an inaudible 20 kHz acoustic pilot tone from your phone speaker. PC detects phone distance and Doppler movement.
       </p>
     </div>
 
     <!-- Surface Tap Trigger Pad -->
     <div class="touch-pad-area" id="touch-pad" onclick="sendPhoneTap()">
-      <div class="pad-icon">⚡</div>
-      <div class="pad-hint">TAP PHONE TO TRIGGER CLICK</div>
-      <span style="font-size: 0.75rem; color: #5a6e7f; margin-top: 6px;">or tap physical desk nearby</span>
+      <div class="pad-icon">
+        <svg class="svg-icon svg-icon-lg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      </div>
+      <div class="pad-hint">Tap Phone to Trigger Click</div>
+      <span style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px;">or tap physical desk nearby</span>
     </div>
 
     <!-- Motion Sensor Status -->
-    <div class="status-item" style="background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px;">
+    <div class="status-item" style="align-items: center; padding: 8px 12px;">
       <span class="label">ACCELEROMETER TAP SENSOR</span>
       <span class="value green" id="accel-status">ACTIVE</span>
     </div>

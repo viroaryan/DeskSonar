@@ -1,10 +1,10 @@
 /**
  * DeskSonar 3D Spatial Holographic Radar Engine (Three.js)
- * Next-Gen Spatial Computing Visualizer:
+ * Minimalist Light-Theme Spatial Computing Visualizer:
  * - 3D Translucent 20cm Origin Spherical Geofence with dynamic breathing aura
  * - 3D Real-Time Hand Bounding Box Dimensions (L x W x H in cm)
- * - 3D Cyberpunk Laptop with dynamic screen tilt & keyboard backlighting
- * - 3D Reflective Desk Surface with physical tap shockwave ripples
+ * - 3D MacBook-Style Laptop with dynamic screen tilt & keyboard backlighting
+ * - 3D Architectural Desk Surface with physical tap shockwave ripples
  * - 3D Real-Time Hand/Finger Tracking Avatar with Particle Trail
  */
 
@@ -52,10 +52,10 @@ class Radar3DEngine {
       return;
     }
 
-    // 1. Scene setup
+    // 1. Scene setup (Minimalist Light Theme)
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x020611);
-    this.scene.fog = new THREE.FogExp2(0x020611, 0.5);
+    this.scene.background = new THREE.Color(0xf8fafc);
+    this.scene.fog = new THREE.FogExp2(0xf8fafc, 0.35);
 
     // 2. Camera setup
     this.camera = new THREE.PerspectiveCamera(50, this.width / this.height, 0.01, 20);
@@ -81,21 +81,22 @@ class Radar3DEngine {
       this.controls.maxDistance = 1.8;
     }
 
-    // 5. Cinematic Lighting
-    const ambientLight = new THREE.AmbientLight(0x00f0ff, 0.5);
-    this.scene.add(ambientLight);
+    // 5. Refined Light-Theme Lighting
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xe2e8f0, 0.85);
+    hemiLight.position.set(0, 1.5, 0);
+    this.scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight.position.set(0.6, 1.2, 0.6);
     this.scene.add(dirLight);
 
-    const cyanPointLight = new THREE.PointLight(0x00f0ff, 2.0, 1.5);
-    cyanPointLight.position.set(0, 0.25, 0.05);
-    this.scene.add(cyanPointLight);
+    const blueAccentLight = new THREE.PointLight(0x2563eb, 1.2, 1.5);
+    blueAccentLight.position.set(0, 0.25, 0.05);
+    this.scene.add(blueAccentLight);
 
-    const greenRimLight = new THREE.PointLight(0x00ff88, 1.8, 1.2);
-    greenRimLight.position.set(-0.3, 0.2, 0.25);
-    this.scene.add(greenRimLight);
+    const emeraldRimLight = new THREE.PointLight(0x059669, 1.0, 1.2);
+    emeraldRimLight.position.set(-0.3, 0.2, 0.25);
+    this.scene.add(emeraldRimLight);
 
     // 6. Build 3D World Elements
     this._buildDeskSurface();
@@ -114,7 +115,7 @@ class Radar3DEngine {
   }
 
   _buildGrid() {
-    const gridHelper = new THREE.GridHelper(1.8, 36, 0x00f0ff, 0x07273e);
+    const gridHelper = new THREE.GridHelper(1.8, 36, 0x2563eb, 0xe2e8f0);
     gridHelper.position.y = -0.001;
     this.scene.add(gridHelper);
   }
@@ -122,9 +123,9 @@ class Radar3DEngine {
   _buildDeskSurface() {
     const deskGeo = new THREE.BoxGeometry(1.8, 0.02, 1.2);
     const deskMat = new THREE.MeshStandardMaterial({
-      color: 0x050c18,
-      roughness: 0.2,
-      metalness: 0.85
+      color: 0xf1f5f9,
+      roughness: 0.5,
+      metalness: 0.1
     });
     this.deskMesh = new THREE.Mesh(deskGeo, deskMat);
     this.deskMesh.position.set(0, -0.01, 0.35);
@@ -135,19 +136,19 @@ class Radar3DEngine {
     // 20cm radius spherical geofence from microphone origin (0, 0.15, 0.10)
     const sphereGeo = new THREE.SphereGeometry(0.20, 32, 32);
     const sphereMat = new THREE.MeshBasicMaterial({
-      color: 0x00ff88,
+      color: 0x059669,
       wireframe: true,
       transparent: true,
-      opacity: 0.25
+      opacity: 0.28
     });
     this.geofenceSphere = new THREE.Mesh(sphereGeo, sphereMat);
     this.geofenceSphere.position.set(0, 0.15, 0.10);
     this.scene.add(this.geofenceSphere);
 
-    // Subtle inner translucent glow
+    // Subtle inner translucent aura
     const auraGeo = new THREE.SphereGeometry(0.196, 24, 24);
     const auraMat = new THREE.MeshBasicMaterial({
-      color: 0x00ff88,
+      color: 0x059669,
       transparent: true,
       opacity: 0.04,
       side: THREE.BackSide
@@ -159,23 +160,23 @@ class Radar3DEngine {
   _buildLaptopModel() {
     this.laptopGroup = new THREE.Group();
 
-    // Base (Keyboard deck)
+    // Base deck (MacBook-style anodized aluminum)
     const baseGeo = new THREE.BoxGeometry(0.32, 0.012, 0.22);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x0b1320, metalness: 0.9, roughness: 0.25 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.25 });
     const base = new THREE.Mesh(baseGeo, baseMat);
     this.laptopGroup.add(base);
 
-    // Glowing Cyan Keyboard
+    // Modern Keyboard Deck
     const kbGeo = new THREE.PlaneGeometry(0.26, 0.11);
-    const kbMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.5 });
+    const kbMat = new THREE.MeshBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.85 });
     const kb = new THREE.Mesh(kbGeo, kbMat);
     kb.rotation.x = -Math.PI / 2;
     kb.position.set(0, 0.007, -0.02);
     this.laptopGroup.add(kb);
 
-    // Stereo Speaker Emitters with Green Glow
+    // Stereo Speaker Emitters with Accent Blue
     const spkGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.005, 16);
-    const spkMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+    const spkMat = new THREE.MeshBasicMaterial({ color: 0x2563eb });
 
     const spkLeft = new THREE.Mesh(spkGeo, spkMat);
     spkLeft.position.set(-0.13, 0.007, -0.02);
@@ -188,21 +189,21 @@ class Radar3DEngine {
     // Screen
     this.laptopScreenGroup = new THREE.Group();
     const screenGeo = new THREE.BoxGeometry(0.32, 0.22, 0.008);
-    const screenMat = new THREE.MeshStandardMaterial({ color: 0x080f18, metalness: 0.85, roughness: 0.2 });
+    const screenMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.7, roughness: 0.3 });
     const screenBack = new THREE.Mesh(screenGeo, screenMat);
     screenBack.position.set(0, 0.11, 0);
     this.laptopScreenGroup.add(screenBack);
 
-    // Glowing Display Panel
+    // High-Contrast Display Panel
     const dispGeo = new THREE.PlaneGeometry(0.30, 0.19);
-    const dispMat = new THREE.MeshBasicMaterial({ color: 0x021020 });
+    const dispMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
     const disp = new THREE.Mesh(dispGeo, dispMat);
     disp.position.set(0, 0.11, 0.005);
     this.laptopScreenGroup.add(disp);
 
     // Dual MEMS Bezel Microphones (Intel SST)
     const micGeo = new THREE.SphereGeometry(0.004, 8, 8);
-    const micMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const micMat = new THREE.MeshBasicMaterial({ color: 0x059669 });
     const micL = new THREE.Mesh(micGeo, micMat);
     micL.position.set(-0.04, 0.21, 0.006);
     this.laptopScreenGroup.add(micL);
@@ -222,21 +223,21 @@ class Radar3DEngine {
   _buildHandAvatar() {
     const handGroup = new THREE.Group();
 
-    // Palm / Hand Core Sphere
+    // Palm / Hand Core Sphere (High Contrast Royal Blue)
     const coreGeo = new THREE.SphereGeometry(0.022, 24, 24);
     const coreMat = new THREE.MeshBasicMaterial({
-      color: 0x00ff88,
+      color: 0x2563eb,
       wireframe: true
     });
     const core = new THREE.Mesh(coreGeo, coreMat);
     handGroup.add(core);
 
-    // Inner Glowing Core
+    // Inner Glowing Core (Emerald)
     const innerGeo = new THREE.SphereGeometry(0.014, 16, 16);
     const innerMat = new THREE.MeshBasicMaterial({
-      color: 0x00f0ff,
+      color: 0x059669,
       transparent: true,
-      opacity: 0.8
+      opacity: 0.85
     });
     const inner = new THREE.Mesh(innerGeo, innerMat);
     handGroup.add(inner);
@@ -244,10 +245,10 @@ class Radar3DEngine {
     // Concentric Holographic Ring
     const ringGeo = new THREE.RingGeometry(0.035, 0.042, 32);
     const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x00f0ff,
+      color: 0x4f46e5,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.6
+      opacity: 0.7
     });
     const ring = new THREE.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI / 2;
@@ -258,14 +259,15 @@ class Radar3DEngine {
     this.handAvatar = handGroup;
     this.scene.add(this.handAvatar);
 
-    // Trajectory Trail
+    // Trajectory Trail (Crisp Royal Blue)
     const trailGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(this.maxTrailPoints * 3);
     trailGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const trailMat = new THREE.LineBasicMaterial({
-      color: 0x00ff88,
+      color: 0x2563eb,
       transparent: true,
-      opacity: 0.5
+      opacity: 0.6,
+      linewidth: 2
     });
     this.trailLine = new THREE.Line(trailGeo, trailMat);
     this.scene.add(this.trailLine);
@@ -275,10 +277,10 @@ class Radar3DEngine {
     // Dynamic Hand 3D Bounding Box (Length x Width x Height)
     const boxGeo = new THREE.BoxGeometry(0.08, 0.04, 0.08);
     const boxMat = new THREE.MeshBasicMaterial({
-      color: 0x00f0ff,
+      color: 0x2563eb,
       wireframe: true,
       transparent: true,
-      opacity: 0.4
+      opacity: 0.5
     });
     this.handBBoxMesh = new THREE.Mesh(boxGeo, boxMat);
     this.handBBoxMesh.position.set(0, 0.12, 0.15);
@@ -288,7 +290,7 @@ class Radar3DEngine {
   _buildUltrasoundBeam() {
     const coneGeo = new THREE.ConeGeometry(0.18, 0.35, 24, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({
-      color: 0x00f0ff,
+      color: 0x4f46e5,
       wireframe: true,
       transparent: true,
       opacity: 0.08,
@@ -303,16 +305,16 @@ class Radar3DEngine {
   triggerDeskTapShockwave(x = 0, z = 0.25) {
     const rippleGeo = new THREE.RingGeometry(0.01, 0.03, 32);
     const rippleMat = new THREE.MeshBasicMaterial({
-      color: 0xff0055,
+      color: 0xe11d48,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.95
     });
     const ripple = new THREE.Mesh(rippleGeo, rippleMat);
     ripple.rotation.x = -Math.PI / 2;
     ripple.position.set(x, 0.005, z);
     this.scene.add(ripple);
-    this.ripples.push({ mesh: ripple, scale: 1.0, opacity: 0.9 });
+    this.ripples.push({ mesh: ripple, scale: 1.0, opacity: 0.95 });
   }
 
   updateAcousticTargets(spatial3D, targets, isLivingHuman = true, isTap = false, geometry = null, bbox = null) {
@@ -393,9 +395,9 @@ class Radar3DEngine {
 
       // Color change on geofence lock
       if (this.isInGeofence) {
-        this.handBBoxMesh.material.color.setHex(0x00ff88);
+        this.handBBoxMesh.material.color.setHex(0x059669);
       } else {
-        this.handBBoxMesh.material.color.setHex(0xffb703);
+        this.handBBoxMesh.material.color.setHex(0xd97706);
       }
     }
 
@@ -404,10 +406,10 @@ class Radar3DEngine {
       const pulse = 1.0 + Math.sin(this.wavePhase) * 0.015;
       this.geofenceSphere.scale.set(pulse, pulse, pulse);
       if (this.isInGeofence) {
-        this.geofenceSphere.material.color.setHex(0x00ff88);
-        this.geofenceSphere.material.opacity = 0.22 + Math.sin(this.wavePhase * 1.5) * 0.05;
+        this.geofenceSphere.material.color.setHex(0x059669);
+        this.geofenceSphere.material.opacity = 0.25 + Math.sin(this.wavePhase * 1.5) * 0.05;
       } else {
-        this.geofenceSphere.material.color.setHex(0xff0055);
+        this.geofenceSphere.material.color.setHex(0xe11d48);
         this.geofenceSphere.material.opacity = 0.35;
       }
     }

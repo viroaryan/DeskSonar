@@ -1,5 +1,6 @@
 /**
  * DeskSonar Mobile Web Audio Ultrasonic Transceiver & Sensor Node
+ * Minimalist Light-Theme Mobile Companion
  */
 
 let phoneWs = null;
@@ -21,14 +22,25 @@ function connectPhoneWebSocket() {
   const statusEl = document.getElementById('phone-ws-status');
 
   phoneWs.onopen = () => {
-    statusEl.innerHTML = '<span class="dot" style="background:#00ff88"></span> CONNECTED TO PC RADAR';
-    statusEl.className = 'value green';
+    if (statusEl) {
+      statusEl.innerHTML = '<span class="dot" style="background:var(--status-success)"></span> CONNECTED TO PC RADAR';
+      statusEl.className = 'value green';
+    }
   };
 
   phoneWs.onclose = () => {
-    statusEl.innerHTML = '<span class="dot blink" style="background:#ff0055"></span> RECONNECTING...';
-    statusEl.className = 'value';
+    if (statusEl) {
+      statusEl.innerHTML = '<span class="dot blink" style="background:var(--status-warning)"></span> RECONNECTING...';
+      statusEl.className = 'value yellow';
+    }
     setTimeout(connectPhoneWebSocket, 2000);
+  };
+
+  phoneWs.onerror = () => {
+    if (statusEl) {
+      statusEl.innerHTML = '<span class="dot blink" style="background:var(--status-danger)"></span> OFFLINE';
+      statusEl.className = 'value red';
+    }
   };
 }
 
@@ -53,10 +65,15 @@ function toggleUltrasonicEmission() {
       oscNode.start();
       isEmitting = true;
 
-      btn.textContent = '🛑 Stop Inaudible Sonar Probe';
-      btn.style.background = 'rgba(255, 0, 85, 0.2)';
-      btn.style.borderColor = '#ff0055';
-      btn.style.color = '#ff0055';
+      if (btn) {
+        btn.innerHTML = `
+          <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="14" height="14" x="5" y="5" rx="2"/>
+          </svg>
+          <span id="toggle-btn-text">Stop Inaudible Sonar Probe</span>
+        `;
+        btn.className = 'hud-btn secondary';
+      }
     } catch (e) {
       alert('Web Audio initialization error: ' + e);
     }
@@ -71,17 +88,26 @@ function toggleUltrasonicEmission() {
     }
     isEmitting = false;
 
-    btn.textContent = '🔊 Start Inaudible Sonar Probe';
-    btn.style.background = 'rgba(0, 255, 136, 0.15)';
-    btn.style.borderColor = 'var(--accent-green)';
-    btn.style.color = 'var(--accent-green)';
+    if (btn) {
+      btn.innerHTML = `
+        <svg class="svg-icon svg-icon-md" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+        <span id="toggle-btn-text">Start Inaudible Sonar Probe</span>
+      `;
+      btn.className = 'hud-btn primary';
+    }
   }
 }
 
 function sendPhoneTap() {
   const pad = document.getElementById('touch-pad');
-  pad.classList.add('active-tap');
-  setTimeout(() => pad.classList.remove('active-tap'), 150);
+  if (pad) {
+    pad.classList.add('active-tap');
+    setTimeout(() => pad.classList.remove('active-tap'), 150);
+  }
 
   // Send tap packet to PC radar over WebSocket
   if (phoneWs && phoneWs.readyState === WebSocket.OPEN) {
@@ -119,10 +145,14 @@ function initMotionSensor() {
       lastZ = acc.z;
     });
 
-    accelStatus.textContent = 'ACTIVE (ACCELEROMETER)';
-    accelStatus.className = 'value green';
+    if (accelStatus) {
+      accelStatus.textContent = 'ACTIVE (ACCELEROMETER)';
+      accelStatus.className = 'value green';
+    }
   } else {
-    accelStatus.textContent = 'TOUCH ONLY';
-    accelStatus.className = 'value yellow';
+    if (accelStatus) {
+      accelStatus.textContent = 'TOUCH ONLY';
+      accelStatus.className = 'value yellow';
+    }
   }
 }
