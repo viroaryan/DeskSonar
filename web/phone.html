@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DeskSonar — Mobile Ultrasonic Node</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+    }
+    .mobile-card {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(12, 18, 28, 0.9);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 16px;
+      padding: 24px 20px;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+      margin-top: 10px;
+    }
+    .touch-pad-area {
+      width: 100%;
+      height: 220px;
+      background: radial-gradient(circle, rgba(0, 240, 255, 0.15) 0%, rgba(5, 10, 20, 0.8) 80%);
+      border: 2px dashed rgba(0, 240, 255, 0.4);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 20px 0;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .touch-pad-area:active, .touch-pad-area.active-tap {
+      background: rgba(0, 240, 255, 0.3);
+      border-color: #00f0ff;
+      transform: scale(0.98);
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+    }
+    .pad-icon {
+      font-size: 3rem;
+      margin-bottom: 8px;
+    }
+    .pad-hint {
+      color: #00f0ff;
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body class="dark-theme">
+  <div class="mobile-card">
+    <div class="logo-area" style="justify-content: center; margin-bottom: 16px;">
+      <div class="title-wrap" style="text-align: center;">
+        <h1 style="font-size: 1.6rem;">PHONE<span class="highlight">NODE</span></h1>
+        <span class="version-tag">DESKSONAR DUAL-NODE COMPANION</span>
+      </div>
+    </div>
+
+    <div class="status-item" style="margin-bottom: 16px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px;">
+      <span class="label">WEBSOCKET STATUS</span>
+      <span class="value" id="phone-ws-status"><span class="dot blink"></span> CONNECTING</span>
+    </div>
+
+    <!-- Acoustic Sonar Transmitter Toggle -->
+    <div class="control-section">
+      <h3>ULTRASONIC TRANSMITTER (20.0 kHz)</h3>
+      <button class="hud-btn primary" id="toggle-ultrasonic-btn" onclick="toggleUltrasonicEmission()" style="width: 100%; height: 48px; font-size: 1rem;">
+        🔊 Start Inaudible Sonar Probe
+      </button>
+      <p style="font-size: 0.75rem; color: #8a9ba8; margin-top: 6px;">
+        Emits an inaudible 20 kHz acoustic pilot tone from your phone speaker. PC detects phone distance and Doppler movement!
+      </p>
+    </div>
+
+    <!-- Surface Tap Trigger Pad -->
+    <div class="touch-pad-area" id="touch-pad" onclick="sendPhoneTap()">
+      <div class="pad-icon">⚡</div>
+      <div class="pad-hint">TAP PHONE TO TRIGGER CLICK</div>
+      <span style="font-size: 0.75rem; color: #5a6e7f; margin-top: 6px;">or tap physical desk nearby</span>
+    </div>
+
+    <!-- Motion Sensor Status -->
+    <div class="status-item" style="background: rgba(0,0,0,0.4); padding: 10px; border-radius: 8px;">
+      <span class="label">ACCELEROMETER TAP SENSOR</span>
+      <span class="value green" id="accel-status">ACTIVE</span>
+    </div>
+  </div>
+
+  <script src="/static/js/phone_node.js"></script>
+</body>
+</html>

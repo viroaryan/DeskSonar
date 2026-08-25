@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeskSonar — Acoustic Gesture Radar & Deep Neural Network Engine</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+  <!-- Three.js 3D Engine & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Futuristic HUD Header -->
+  <header class="hud-header">
+    <div class="logo-area">
+      <div class="radar-icon-pulse"></div>
+      <div class="title-wrap">
+        <h1>DESK<span class="highlight">SONAR</span></h1>
+        <span class="version-tag">ACOUSTIC RADAR • DEEP NEURAL NET • v4.0</span>
+      </div>
+    </div>
+
+    <div class="system-status-bar">
+      <div class="status-item">
+        <span class="label">ML NEURAL NET</span>
+        <span class="value green" id="ml-pred-badge">✨ IDLE</span>
+      </div>
+      <div class="status-item">
+        <span class="label">NVIDIA COGNITIVE AI</span>
+        <span class="value green" id="ai-intent-badge">🟢 LIVING HUMAN INTENT</span>
+      </div>
+      <div class="status-item">
+        <span class="label">20CM GEOFENCE</span>
+        <span class="value green" id="geofence-badge">🟢 20CM GEOFENCE LOCK</span>
+      </div>
+      <div class="status-item">
+        <span class="label">CONNECTION</span>
+        <span class="value" id="conn-status"><span class="dot blink"></span> CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="dashboard-grid">
+    
+    <!-- LEFT PANEL: 3D Real-Time Spatial Holographic Studio -->
+    <section class="panel radar-panel">
+      <div class="panel-header">
+        <span class="header-icon">🌐</span>
+        <h2>3D REAL-TIME SPATIAL HOLOGRAPHIC STUDIO</h2>
+        <div class="camera-btn-group">
+          <button class="pill-btn" onclick="set3DCamera('perspective')">Perspective</button>
+          <button class="pill-btn" onclick="set3DCamera('top')">Top View</button>
+          <button class="pill-btn" onclick="set3DCamera('side')">Side View</button>
+        </div>
+      </div>
+      <div class="canvas-wrapper 3d-wrapper" id="radar3dContainer" style="min-height: 380px;">
+        <!-- Three.js Canvas injected here -->
+      </div>
+      <div class="radar-overlay-stats">
+        <div class="metric-box">
+          <span class="m-label">3D HAND DIMENSIONS (L×W×H)</span>
+          <span class="m-val green" id="bbox-dims-val">L:11.5 × W:8.2 × H:3.8 cm</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">3D POSITION (X, Y, Z)</span>
+          <span class="m-val" id="coords-3d-val">X:0 Y:12 Z:15 cm</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">PHYSICAL SCREEN TILT</span>
+          <span class="m-val yellow" id="laptop-tilt-val">108.0° TILT | 20.5cm HEIGHT</span>
+        </div>
+        <div class="metric-box">
+          <span class="m-label">WIN32 CURSOR PIXEL</span>
+          <span class="m-val cyan" id="cursor-coords-val">[960, 540] px</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- CENTER TOP PANEL: 120° Dual-Mic Azimuth Sector Radar (2D Beamformer) -->
+    <section class="panel sector-panel">
+      <div class="panel-header">
+        <span class="header-icon">📡</span>
+        <h2>120° DUAL-MIC AZIMUTH SECTOR RADAR</h2>
+        <span class="pill cyan-pill">PDoA BEAMFORMER [-60°, +60°]</span>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas id="polarRadarCanvas" width="560" height="260"></canvas>
+      </div>
+      <div class="sector-legend">
+        <span>👈 LEFT (-60°)</span>
+        <span class="highlight">CENTER (0°)</span>
+        <span>RIGHT (+60°) 👉</span>
+      </div>
+    </section>
+
+    <!-- CENTER BOTTOM PANEL: 1D Range Profile & Real CFAR Curve + RDM -->
+    <section class="panel range-profile-panel">
+      <div class="panel-header">
+        <span class="header-icon">📈</span>
+        <h2>1D RANGE PROFILE & CA-CFAR THRESHOLD</h2>
+        <span class="pill">DIRECT-PATH ANCHOR LOCK</span>
+      </div>
+      <div class="canvas-wrapper" style="display: flex; gap: 6px;">
+        <canvas id="rangeProfileCanvas" width="280" height="170"></canvas>
+        <canvas id="rdmCanvas" width="270" height="170"></canvas>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: ML Neural Network, NVIDIA AI Telemetry, Gestures & Desktop Controls -->
+    <aside class="panel controls-panel">
+      
+      <!-- ML Neural Network Real-Time Gesture Probability Meter -->
+      <div class="ai-telemetry-container">
+        <div class="gesture-title-row">
+          <h3>DEEP NEURAL NET GESTURE PREDICTOR</h3>
+          <span class="ai-badge-pill" id="ml-conf-val">95% CONFIDENCE</span>
+        </div>
+        <div class="ml-prob-grid">
+          <div class="ml-prob-row">
+            <span class="p-name">👈 Swipe Left</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-swipe_left" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-swipe_left">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">👉 Swipe Right</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-swipe_right" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-swipe_right">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">⏩ Push (Zoom)</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-push" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-push">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">⏪ Pull (Back)</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-pull" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-pull">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">⬆️ Scroll Up</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-scroll_up" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-scroll_up">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">⬇️ Scroll Down</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-scroll_down" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-scroll_down">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">💥 Desk Tap</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-tap" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-tap">0%</span>
+          </div>
+          <div class="ml-prob-row">
+            <span class="p-name">💥💥 Double Tap</span>
+            <div class="p-track"><div class="p-bar" id="prob-bar-double_tap" style="width: 0%;"></div></div>
+            <span class="p-val" id="prob-val-double_tap">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- NVIDIA Cognitive AI Telemetry Card -->
+      <div class="ai-telemetry-container" style="margin-top: 10px;">
+        <div class="gesture-title-row">
+          <h3>NVIDIA COGNITIVE AI REASONING</h3>
+          <span class="ai-badge-pill" id="ai-conf-val">88% AI CONFIDENCE</span>
+        </div>
+        <div class="ai-card">
+          <div class="ai-source-row">
+            <span class="label">SOURCE:</span>
+            <span class="value green" id="ai-source-val">HUMAN HAND</span>
+          </div>
+          <div class="ai-reason-row" id="ai-reason-val">
+            Active living acoustic Doppler & continuous heterodyne phase tracking verified within 20cm geofence.
+          </div>
+        </div>
+      </div>
+
+      <!-- Gesture Alert Box -->
+      <div class="gesture-alert-container">
+        <div class="gesture-title-row">
+          <h3>ACTIVE GESTURE & OS COMMAND</h3>
+          <span class="gesture-count" id="total-gestures-badge">0 TRIGGERED</span>
+        </div>
+        <div class="gesture-display-card" id="gesture-card">
+          <div class="gesture-icon" id="gesture-icon">✨</div>
+          <div class="gesture-info">
+            <div class="gesture-name" id="gesture-name">READY FOR INPUT</div>
+            <div class="gesture-meta" id="gesture-meta">Move hand in front of laptop to move mouse cursor, tap table to click</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desk Tap Shockwave Progress Meter -->
+      <div class="tap-meter-container">
+        <div class="meter-header">
+          <span>TKEO DESK SHOCKWAVE ENERGY</span>
+          <span id="tap-energy-val">0.0 dB</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="tap-meter-fill"></div>
+          <div class="threshold-marker" style="left: 60%;"></div>
+        </div>
+      </div>
+
+      <!-- OS Cursor & Window Control Toggles -->
+      <div class="control-section">
+        <h3>DESKTOP & CURSOR CONTROLLER</h3>
+        <div class="action-buttons">
+          <button class="hud-btn primary" id="cursor-toggle-btn" onclick="toggleCursorControl()">
+            🖱️ Win32 OS Cursor: ACTIVE
+          </button>
+          <button class="hud-btn" id="calibrate-btn" onclick="triggerCalibration()">
+            🎙️ Auto-Calibrate 20cm Zone
+          </button>
+          <button class="hud-btn" id="train-ml-btn" onclick="triggerMLRetrain()">
+            🧠 Retrain Acoustic ML Model
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Interactive Simulation / Test Triggers -->
+      <div class="control-section">
+        <h3>TEST SCENARIO TRIGGER (SIMULATOR)</h3>
+        <div class="btn-grid">
+          <button class="hud-btn" onclick="setScenario('desk_tap')">💥 Desk Tap</button>
+          <button class="hud-btn" onclick="setScenario('double_tap')">💥💥 Double Tap</button>
+          <button class="hud-btn" onclick="setScenario('approach_push')">⏩ Push (Zoom)</button>
+          <button class="hud-btn" onclick="setScenario('retreat_pull')">⏪ Pull (Back)</button>
+          <button class="hud-btn" onclick="setScenario('hover_scroll')">🔄 Air Scroll</button>
+          <button class="hud-btn" onclick="setScenario('idle')">⏹️ Idle</button>
+        </div>
+      </div>
+
+      <!-- Phone Companion Node Info -->
+      <div class="phone-node-card">
+        <div class="phone-icon">📱</div>
+        <div class="phone-text">
+          <h4>SMARTPHONE DUAL-NODE COMPANION</h4>
+          <p>Open <code id="phone-url">http://&lt;IP&gt;:8765/phone</code> on phone for dual-node transceiver.</p>
+          <a href="/phone" target="_blank" class="phone-link">Open Mobile UI &rarr;</a>
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- Visualizer Scripts -->
+  <script src="/static/js/radar_canvas.js"></script>
+  <script src="/static/js/radar_3d_engine.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

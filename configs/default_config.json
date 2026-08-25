@@ -1,0 +1,53 @@
+{
+  "system": {
+    "name": "DeskSonar",
+    "version": "1.0.0",
+    "mode": "auto",
+    "sample_rate": 48000,
+    "chunk_size": 2048,
+    "audio_channels": 1,
+    "speaker_volume": 0.35
+  },
+  "radar": {
+    "carrier_frequency_hz": 20000.0,
+    "fmcw_enabled": true,
+    "fmcw_start_freq_hz": 18000.0,
+    "fmcw_end_freq_hz": 22000.0,
+    "fmcw_sweep_time_s": 0.040,
+    "speed_of_sound_m_s": 343.0,
+    "max_range_meters": 1.2,
+    "min_range_meters": 0.04,
+    "num_doppler_bins": 128,
+    "num_range_bins": 256,
+    "doppler_fps": 60
+  },
+  "dsp": {
+    "bandpass_low_hz": 17500.0,
+    "bandpass_high_hz": 22500.0,
+    "bandpass_order": 5,
+    "cfar_guard_cells": 4,
+    "cfar_training_cells": 12,
+    "cfar_threshold_factor": 2.2,
+    "tap_energy_threshold_db": 14.0,
+    "tap_min_duration_ms": 8,
+    "tap_max_duration_ms": 90,
+    "double_tap_window_ms": 400
+  },
+  "gestures": {
+    "enabled": true,
+    "tap_action": "mouse_left_click",
+    "double_tap_action": "media_play_pause",
+    "push_action": "zoom_in",
+    "pull_action": "zoom_out",
+    "hover_scroll_enabled": true,
+    "hover_scroll_sensitivity": 1.5,
+    "wave_left_action": "prev_tab",
+    "wave_right_action": "next_tab"
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8765,
+    "ws_telemetry_rate_hz": 30,
+    "enable_web_ui": true
+  }
+}
